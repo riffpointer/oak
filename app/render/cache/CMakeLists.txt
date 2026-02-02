@@ -4,5 +4,7 @@ set(OLIVE_SOURCES
         render/cache/framecache.h
         render/cache/framehashcache.cpp
         render/cache/framehashcache.h
+        render/cache/framememcache.h
+        render/cache/framememcache.cpp
         PARENT_SCOPE
 )

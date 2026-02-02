@@ -116,59 +116,18 @@ public:
         return last_use;
     }
 
-    size_t size(){
-        int byte_per_channel = texture_->format().byte_count();
-        int width = texture_->width();
-        int height = texture_->height();
-        int channel_count = texture_->channel_count();
-		int overhead_factor = 1.3; // std::shared_ptr, metadata
-        return byte_per_channel * width * height * channel_count * overhead_factor;
-	}
+    size_t size();
 
 };
 using FrameCacheEntryPtr = std::shared_ptr<FrameCacheEntry>;
-/*
- * LRU Frame Cache
- * TODO: This is just a mininum version. It should 
- * be replaced by a more complex one.
- * We use 25% of availiable memory as LRU Cache.
- */
-class FrameMemCache {
-private:
-    QHash<FrameCacheKey, FrameCacheEntryPtr> map_;
-    static FrameMemCache frame_cache_;
-    std::mutex map_lock;
-    std::mutex size_lock;
-    size_t cache_size;
-    bool stop = false;
-    std::thread *gc_thread;
-    QList<FrameCacheKey> lru_list;
+class FrameCacheStore {
 public:
-	static FrameMemCache *getInstance()
-	{
-		return &frame_cache_;
-	}
-	FrameMemCache()
-	{
-		auto f = std::bind(&FrameMemCache::thread, this);
-		gc_thread=new std::thread(f);
-	};
-	~FrameMemCache()
-	{
-		finalize();
-	};
 
-	FrameCacheEntryPtr get(FrameCacheKey& key);
-    void set(FrameCacheKey &key, FrameCacheEntryPtr entry);
-    void remove(FrameCacheKey &key);
-
-    void finalize(){
-        stop = true;
-        gc_thread->join();
-        delete gc_thread;
-    }
+	virtual FrameCacheEntryPtr get(FrameCacheKey &key) = 0;
+	virtual void set(FrameCacheKey &key, FrameCacheEntryPtr entry) = 0;
+	virtual void remove(FrameCacheKey &key) = 0;
 protected:
-    void thread();
+	void thread();
 };
 }
 #endif
