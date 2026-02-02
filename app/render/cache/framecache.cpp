@@ -1,6 +1,7 @@
 #include "framecache.h"
 #include <mutex>
 #include <qsysinfo.h>
+#include <spdlog/spdlog.h>
 #include <xcb/xproto.h>
 #ifdef _WIN32
 #include <windows.h>
@@ -78,14 +79,15 @@ void my_sleep(unsigned int seconds)
 }
 
 using namespace olive::cache;
-FrameCache FrameCache::frame_cache_;
+FrameMemCache FrameMemCache::frame_cache_;
 
 inline void my_sleep(){
 
 }
 
-void FrameCache::thread(){
-    while(!stop){
+void FrameMemCache::thread()
+{
+	while(!stop){
         std::unique_lock<std::mutex> lock(size_lock);
         lock.lock();
 		cache_size = get_available_memory() * 0.25;
@@ -108,4 +110,35 @@ void FrameCache::thread(){
         lock.unlock();
 		my_sleep(5);
     }
+}
+FrameCacheEntryPtr FrameMemCache::get(FrameCacheKey &key)
+{
+	if (map_.contains(key)) {
+		if (lru_list.last() != key) {
+			lru_list.removeOne(key);
+			lru_list.append(key);
+		}
+		return map_[key];
+	} else {
+		return nullptr;
+	}
+}
+
+void FrameMemCache::set(FrameCacheKey &key, FrameCacheEntryPtr entry)
+{
+	std::lock_guard<std::mutex> lock(this->map_lock);
+	map_[key] = entry;
+	if (!lru_list.contains(key)) {
+		lru_list.append(key);
+	} else {
+		lru_list.removeOne(key);
+		lru_list.append(key);
+	}
+}
+
+void FrameMemCache::remove(FrameCacheKey &key)
+{
+	std::lock_guard<std::mutex> lock(this->map_lock);
+	lru_list.removeOne(key);
+	map_.remove(key);
 }

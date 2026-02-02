@@ -66,8 +66,8 @@ public:
 	virtual void SetPassthrough(PlaybackCache *cache) override;
 
 protected:
-	virtual void LoadStateEvent(QDataStream &stream) override;
-	virtual void SaveStateEvent(QDataStream &stream) override;
+	void LoadStateEvent(QDataStream &stream) override;
+	void SaveStateEvent(QDataStream &stream) override;
 
 private:
 	rational ToTime(const int64_t &ts) const;

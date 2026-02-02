@@ -26,7 +26,7 @@
 #include "node/node.h"
 #include "node/output/track/track.h"
 #include "render/audioplaybackcache.h"
-#include "render/framehashcache.h"
+#include "render/cache/framehashcache.h"
 #include "render/subtitleparams.h"
 #include "render/videoparams.h"
 #include "timeline/timelinemarker.h"

@@ -41,7 +41,7 @@
 #include "node/param.h"
 #include "render/audioplaybackcache.h"
 #include "render/audiowaveformcache.h"
-#include "render/framehashcache.h"
+#include "render/cache/framehashcache.h"
 #include "render/job/generatejob.h"
 #include "render/job/samplejob.h"
 #include "render/job/shaderjob.h"
