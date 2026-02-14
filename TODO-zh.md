@@ -1,71 +1,89 @@
 # TODO
 
 ## 目标
-- 将渲染缓存重构为“内存 + 磁盘”的二级 LRU，并预留“显存 + 内存 + 磁盘”三级 LRU 的扩展路径。每一步必须可编译。
+- 在现有磁盘缓存（`FrameHashCache`）之上增加 LRU 内存缓存。
+- 采用“小步快跑”方式推进，每一步都可编译、可回退。
 
-## 当前缓存现状（已有代码）
-- `app/render/playbackcache.cpp/.h`：时间范围有效性 + 状态持久化，不存帧数据。
-- `app/render/cache/framehashcache.h/.cpp`：磁盘帧缓存（EXR/JPG），继承 PlaybackCache。
-- `app/render/cache/framecache.h`：内存 LRU 原型（基于 Texture，需整理并嵌入）。
+## 范围
+- 本轮范围：帧结果缓存（预览/渲染读写路径）。
+- 本轮不做：GPU 缓存层、跨进程共享内存、音频缓存大改。
 
-## 嵌入思路（FrameMemCache 如何融入）
-- `PlaybackCache` 作为“时间范围有效性层”。
-- `FrameHashCache` 作为“磁盘层”。
-- 将 `FrameMemCache` 重构为“内存层”，并组合成分层缓存：
-  - `get()` 顺序：显存（未来）-> 内存 -> 磁盘。
-  - `put()` 先写内存，再写磁盘（或延迟写磁盘）。
-  - `invalidate()` 统一清理内存并更新 PlaybackCache；磁盘仍由 FrameHashCache 负责。
+## 基本原则
+- 复用现有链路：`PlaybackCache`（时间范围有效性）+ `FrameHashCache`（磁盘文件）。
+- 避免并存两套架构。
+- 未接入主路径的原型代码优先删除，而不是继续叠加改造。
 
-## 小步快跑计划（每步可编译）
+## 小步快跑计划（LRU）
 
-### 步骤 1（可编译）：整理 `FrameMemCache` 使其可嵌入
-- 将 `app/render/cache/framecache.h` 拆成 `framecache.h/.cpp`（先不改行为）。
-- 移除 `gtest` 和测试相关头文件。
-- 增加 include guard / `#pragma once`，完善 const 正确性。
-- 为 `FrameCacheKey` 增加 `qHash(...)` 和 `const` 的 `operator==`，可用于 `QHash`。
-- `FrameCacheEntry` 支持 CPU `FramePtr` 与 GPU `TexturePtr`（先仅用 CPU）。
-- 增加统一的 `size_bytes()` 接口用于淘汰计算。
+### 步骤 0：先清基线
+- 删除未接入运行时路径的原型文件：
+  - `app/render/cache/framecache.h`
+  - `app/render/cache/framecache.cpp`
+  - `app/render/cache/framediskcache.h`
+  - `app/render/cache/framediskcache.cpp`
+  - `app/render/cache/framememcache.h`
+- 先确保工程可编译，且现有磁盘缓存行为不变。
 
-### 步骤 2（可编译）：定义统一的分层缓存接口
-- 新增 `app/render/cache/framecachestore.h`：
-  - `CacheKey`（版本、时间、VideoParams、代理模式、渲染缩放）。
-  - `CacheValue`（FramePtr + 可选元数据）。
-  - `FrameCacheStore` 接口：`get/put/invalidateByVersion/invalidateRange`。
-- 适配 `FrameMemCache` 为 `FrameMemCacheStore`。
+### 步骤 1：新增最小可用内存 LRU 容器
+- 新增 `app/render/cache/framememorycache.h/.cpp`：
+  - `FrameMemoryCacheKey`：`cache_uuid + timestamp + video params 签名`。
+  - `FrameMemoryCacheValue`：`FramePtr` + `size_bytes`。
+  - LRU 结构：哈希表 + 双向链表。
+- 最小 API：
+  - `bool Get(const Key&, FramePtr*)`
+  - `void Put(const Key&, const FramePtr&)`
+  - `void InvalidateRange(const QUuid&, const TimeRange&, const rational& timebase)`
+  - `void InvalidateAll(const QUuid&)`
+  - `void SetBudgetBytes(size_t)`
 
-### 步骤 3（可编译）：为磁盘层增加封装
-- 新增 `FrameDiskCacheStore` 作为薄封装：
-  - 调用 `FrameHashCache::LoadCacheFrame/SaveCacheFrame`。
-  - 仍使用 PlaybackCache 的有效范围与失效机制。
+### 步骤 2：落实严格 LRU 淘汰
+- 触发条件：`current_bytes > budget_bytes`。
+- 循环淘汰最久未使用项，直到回到预算内。
+- `Get()` 必须把命中项移动到 MRU。
+- `Put()` 覆盖已有 key 时更新值并移动到 MRU。
 
-### 步骤 4（小行为）：当前帧的二级查询
-- 在已有渲染路径中：
-  - 先查内存层。
-  - 未命中则查磁盘层，命中后加载到内存并返回。
-  - 未命中则正常渲染，并写入内存，必要时写盘。
-- 初期将缓存预算控制在很小范围。
+### 步骤 3：接入“内存优先”的读取路径
+- 在帧读取路径中：
+  - 先查内存 LRU。
+  - 内存未命中再走现有 `FrameHashCache` 磁盘读取。
+  - 磁盘命中后回填内存 LRU。
+- 失败回退逻辑与当前保持一致。
 
-### 步骤 5（行为）：内存层统一 LRU 淘汰
-- 根据 `size_bytes()` + 内存预算淘汰最久未使用条目。
-- 访问 `get()` 必须更新 LRU 顺序。
+### 步骤 4：渲染完成后写穿透
+- 每次新渲染得到帧后：
+  - 先写入内存 LRU。
+  - 继续沿用当前磁盘写入（`FrameHashCache::SaveCacheFrame`），即 write-through。
+- 本阶段不引入 write-back。
 
-### 步骤 6（行为）：明确磁盘写入策略
-- 增加 `write_through`（立即写盘）与 `write_back`（延迟写盘）策略。
-- 默认采用保守的 `write_through`。
+### 步骤 5：打通失效清理
+- 将 `PlaybackCache::Invalidate` / `InvalidateAll` 对应到内存 LRU 清理：
+  - 同 cache UUID。
+  - 同时间范围（按 cache timebase 换算 timestamp）。
+- 磁盘失效逻辑继续由 `FrameHashCache`/`DiskManager` 负责。
 
-### 步骤 7（行为）：失效策略贯通
-- `Invalidate/InvalidateAll` 时清理内存层对应时间范围。
-- 磁盘失效仍由 FrameHashCache 与 DiskManager 处理。
+### 步骤 6：补齐可观测性与保险开关
+- 增加 debug 计数：
+  - memory hit/miss/evict
+  - disk hit/miss（可统计处）
+- 增加内存预算配置项（保守默认值，例如 256MB）。
+- 增加总开关，可一键禁用内存层。
 
-### 步骤 8（面向未来，可编译）：增加显存层占位
-- 新增 `FrameGpuCacheStore`（仅 TexturePtr，占位）。
-- 形成三层顺序：显存 -> 内存 -> 磁盘。
-- 通过特性开关或能力判断启用。
+### 步骤 7：验证与收敛
+- 功能验证：
+  - 重复 seek/loop 播放
+  - 编辑后失效
+  - 工程重开
+- 压力验证：
+  - 小预算内存
+  - 高分辨率时间线
+  - 长时间线随机访问
 
-### 步骤 9（可选行为）：统计与日志
-- 增加每层命中/未命中计数（仅 debug）。
+## 验收标准
+- 开启内存缓存后，重复访问帧有稳定内存命中率提升。
+- 编辑/失效后缓存正确性无回归。
+- 关闭内存层时，磁盘缓存单独工作正常。
+- 长时间压力下无崩溃、无明显泄漏。
 
-## 待确认问题
-- 内存预算默认值（按硬件分级）。
-- 磁盘缓存保留策略与路径。
-- GPU 缓存的上下文生命周期与失效策略。
+## 后续（本轮不做）
+- 可选 write-back 策略。
+- 可选 GPU 缓存层（位于内存层之上）。

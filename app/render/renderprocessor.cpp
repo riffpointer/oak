@@ -31,7 +31,7 @@
 #include "node/block/transition/transition.h"
 #include "node/project.h"
 #include "rendermanager.h"
-#include "render/cache/framehashcache.h"
+#include "render/framehashcache.h"
 #include "render/opengl/openglrenderer.h"
 #include "render/plugin/pluginrenderer.h"
 #include "pluginSupport/OliveClip.h"

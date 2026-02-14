@@ -44,8 +44,6 @@
 #include "widget/slider/integerslider.h"
 #include "widget/slider/rationalslider.h"
 
-#include <OpenImageIO/detail/fmt/base.h>
-
 namespace olive
 {
 
