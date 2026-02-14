@@ -1,4 +1,23 @@
 
+/***
+
+  Oak Video Editor - Non-Linear Video Editor
+  Copyright (C) 2026 Oak Team
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+***/
 #ifndef FRAME_CACHE_H
 #define FRAME_CACHE_H
 #include "codec/frame.h"
@@ -16,71 +35,65 @@
 #include <QThread>
 #include <qobject.h>
 #include <qtmetamacros.h>
+#include <quuid.h>
 #include <thread>
 #include <utility>
 #include <hash>
 #include <qhashfunctions.h>
 namespace olive::cache{
 class FrameCacheKey;
-static size_t qHashForFrameCacheKey(const FrameCacheKey &key, size_t seed = 0);
+size_t qHash(const FrameCacheKey &key, size_t seed = 0);
 class FrameCacheKey {
 private:
     uint64_t version_ = 0;
     rational time_ = 0;
     VideoParams params_;
+	QString path_;
+	QUuid uuid_;
 public:
-    FrameCacheKey() = default;
+	FrameCacheKey() = default;
     FrameCacheKey(uint64_t version, rational time, VideoParams &params)
-        : version_(version), time_(time), params_(params){}
-    uint64_t version() const{
+        : version_(version), time_(time), params_(params){
+            uuid_=QUuid::createUuid();
+        }
+	FrameCacheKey(uint64_t version, rational time, VideoParams &params,
+				  QString &path, QUuid uuid)
+		: version_(version)
+		, time_(time)
+		, params_(params)
+		, path_(path)
+		, uuid_(uuid)
+	{
+	}
+	[[nodiscard]] uint64_t version() const{
         return version_;
     }
-    rational time() const{
+    [[nodiscard]] rational time() const{
         return time_;
     }
-    VideoParams params() const {
+    [[nodiscard]] VideoParams params() const {
         return params_;
     }
-    bool operator==(FrameCacheKey &other) const{
+    void set_path(QString &path){
+        this->path_=path;
+    }
+	void set_uuid(QUuid &uuid)
+	{
+		this->uuid_ = uuid;
+	}
+	[[nodiscard]] QString path() const{
+        return path_;
+    }
+	[[nodiscard]] QUuid uuid() const
+	{
+		return uuid_;
+	}
+	bool operator==(FrameCacheKey &other) const{
         return version_==other.version_ && time_ == other.time_
-            && params_ == other.params_;
+            && params_ == other.params_ && path_ == other.path_;
     }
     size_t qHash(const FrameCacheKey& key, size_t seed);
 };
-static size_t qHashForFrameCacheKey(const FrameCacheKey &key, size_t seed)
-{
-	const VideoParams params = key.params();
-	return qHashMulti(seed,
-					  key.version(),
-					  key.time().toDouble(),
-					  params.width(),
-					  params.height(),
-					  params.depth(),
-					  params.time_base().numerator(),
-					  params.time_base().denominator(),
-					  static_cast<int>(params.format()),
-					  params.channel_count(),
-					  params.pixel_aspect_ratio().numerator(),
-					  params.pixel_aspect_ratio().denominator(),
-					  static_cast<int>(params.interlacing()),
-					  params.divider(),
-					  params.effective_width(),
-					  params.effective_height(),
-					  params.effective_depth(),
-					  params.square_pixel_width(),
-					  params.enabled(),
-					  params.stream_index(),
-					  static_cast<int>(params.video_type()),
-					  params.frame_rate().numerator(),
-					  params.frame_rate().denominator(),
-					  params.start_time(),
-					  params.duration(),
-					  params.premultiplied_alpha(),
-					  params.colorspace(),
-					  params.x(),
-					  params.y(),
-					  static_cast<int>(params.color_range()));
-}
 class FrameCacheEntry{
 private:
     TexturePtr texture_;
@@ -96,7 +109,7 @@ public:
 	}
 	explicit FrameCacheEntry(FramePtr &frame)
 	{
-		frame = frame;
+		frame_ = frame;
 		last_use = std::time(nullptr);
 	}
 	TexturePtr texture(){
@@ -105,7 +118,8 @@ public:
     }
 
     FramePtr frame(){
-        return frame_;
+		last_use = std::time(nullptr);
+		return frame_;
     }
 
     bool is_cpu(){
@@ -122,7 +136,6 @@ public:
 using FrameCacheEntryPtr = std::shared_ptr<FrameCacheEntry>;
 class FrameCacheStore {
 public:
-
 	virtual FrameCacheEntryPtr get(FrameCacheKey &key) = 0;
 	virtual void set(FrameCacheKey &key, FrameCacheEntryPtr entry) = 0;
 	virtual void remove(FrameCacheKey &key) = 0;
