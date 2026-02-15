@@ -22,6 +22,7 @@
 #ifndef PLAYBACKCACHE_H
 #define PLAYBACKCACHE_H
 
+#include "codec/frame.h"
 #include <olive/core/core.h>
 #include <QDir>
 #include <QMutex>
@@ -65,13 +66,13 @@ public:
 
 	QString GetCacheDirectory() const;
 
-	void Invalidate(const TimeRange &r);
+	virtual void Invalidate(const TimeRange &r);
 
-	bool HasValidatedRanges() const
+	virtual bool HasValidatedRanges() const
 	{
 		return !validated_.isEmpty();
 	}
-	const TimeRangeList &GetValidatedRanges() const
+	virtual const TimeRangeList &GetValidatedRanges() const
 	{
 		return validated_;
 	}
@@ -82,8 +83,8 @@ public:
 	static QDir GetThisCacheDirectory(const QString &cache_path,
 									  const QUuid &cache_id);
 
-	void LoadState();
-	void SaveState();
+	virtual void LoadState();
+	virtual void SaveState();
 
 	void Draw(QPainter *painter, const rational &start, double scale,
 			  const QRect &rect) const;
@@ -135,6 +136,8 @@ public:
 			emit Requested(request_context_, r);
 		}
 	}
+	virtual FramePtr LoadCacheFrame(const int64_t &time) const = 0;
+	virtual bool SaveCacheFrame(const int64_t &time, FramePtr frame) = 0;
 
 public slots:
 	void InvalidateAll();

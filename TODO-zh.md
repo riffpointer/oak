@@ -15,15 +15,6 @@
 
 ## 小步快跑计划（LRU）
 
-### 步骤 0：先清基线
-- 删除未接入运行时路径的原型文件：
-  - `app/render/cache/framecache.h`
-  - `app/render/cache/framecache.cpp`
-  - `app/render/cache/framediskcache.h`
-  - `app/render/cache/framediskcache.cpp`
-  - `app/render/cache/framememcache.h`
-- 先确保工程可编译，且现有磁盘缓存行为不变。
-
 ### 步骤 1：新增最小可用内存 LRU 容器
 - 新增 `app/render/cache/framememorycache.h/.cpp`：
   - `FrameMemoryCacheKey`：`cache_uuid + timestamp + video params 签名`。
