@@ -25,7 +25,9 @@ namespace olive
 {
 
 PreviewAudioDevice::PreviewAudioDevice(QObject *parent)
-	: notify_interval_(0)
+	: QIODevice(parent)
+	, bytes_per_frame_(0)
+	, notify_interval_(0)
 	, bytes_read_(0)
 {
 }

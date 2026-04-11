@@ -14,6 +14,8 @@ jobs:
     env:
       CMAKE_BUILD_TYPE: Release
       RUN_OFX_ITEST: "0"
+      # Enable plugin smoke tests
+      OAK_PLUGIN_SMOKE_TEST: "1"
     steps:
       - uses: actions/checkout@v4
         with: 
@@ -146,8 +148,37 @@ jobs:
         if: runner.os == 'Linux'
         env:
           QT_QPA_PLATFORM: offscreen
+          OAK_PLUGIN_SMOKE_TEST: "1"
         run: ctest --test-dir build --output-on-failure -C ${{ env.CMAKE_BUILD_TYPE }}
 
       - name: Test (macOS/Windows)
         if: runner.os != 'Linux'
+        env:
+          OAK_PLUGIN_SMOKE_TEST: "1"
         run: ctest --test-dir build --output-on-failure -C ${{ env.CMAKE_BUILD_TYPE }}
+
+      - name: Plugin Smoke Tests (Linux)
+        if: runner.os == 'Linux'
+        env:
+          QT_QPA_PLATFORM: offscreen
+          OAK_PLUGIN_SMOKE_TEST: "1"
+        run: |
+          echo "Running plugin subsystem smoke tests..."
+          ./build/tests/gtest/olive-gtest --gtest_filter="PluginSmoke*"
+
+      - name: Plugin Smoke Tests (macOS)
+        if: runner.os == 'macOS'
+        env:
+          OAK_PLUGIN_SMOKE_TEST: "1"
+        run: |
+          echo "Running plugin subsystem smoke tests..."
+          ./build/tests/gtest/olive-gtest --gtest_filter="PluginSmoke*"
+
+      - name: Plugin Smoke Tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          OAK_PLUGIN_SMOKE_TEST: "1"
+        run: |
+          Write-Host "Running plugin subsystem smoke tests..."
+          & "$env:GITHUB_WORKSPACE\build\tests\gtest\olive-gtest.exe" --gtest_filter="PluginSmoke*"

@@ -19,6 +19,8 @@ add_executable(olive-gtest
   plugin_support_image_test.cpp
   plugin_support_clip_test.cpp
   plugin_support_param_test.cpp
+  plugin_smoke_test.cpp
+  audio_smoke_test.cpp
   opengl_readback_guard_test.cpp
   plugin_render_pipeline_test.cpp
   plugin_renderer_readback_test.cpp
