@@ -98,7 +98,8 @@ TEST(PluginIntegration, ChromaKeyerCreateAndRender)
 		dynamic_cast<olive::plugin::OlivePluginInstance *>(instance);
 	ASSERT_TRUE(olive_instance);
 
-	olive::VideoParams params(320, 240, olive::core::PixelFormat::U8, 4);
+	// Use U16 format as the ChromaKeyer plugin expects 16-bit input
+	olive::VideoParams params(320, 240, olive::core::PixelFormat::U16, 4);
 	olive_instance->setVideoParam(params);
 
 	olive::TexturePtr input = CreateSolidTexture(params);

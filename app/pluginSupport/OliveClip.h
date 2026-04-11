@@ -62,10 +62,7 @@ public:
 
 	void setRegionOfDefinition(OfxRectD regionOfDefinition, OfxTime time);
 	void setDefaultRegionOfDefinition(OfxRectD regionOfDefinition);
-	void setParams(const VideoParams &params)
-	{
-		params_ = params;
-	}
+	void setParams(const VideoParams &params);
 #   ifdef OFX_SUPPORTS_OPENGLRENDER
 	OFX::Host::ImageEffect::Texture* loadTexture(OfxTime time,
 												 const char *format,

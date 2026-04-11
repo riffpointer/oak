@@ -1497,13 +1497,19 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 		}
 		if (is_usable_input(input_tex)) {
 			input_textures[entry.first] = input_tex;
-			std::string bitdepth = input_clip->getProps()
-				.getStringProperty(kOfxImageEffectPropPixelDepth);
-			std::string component = input_clip->getProps()
-				.getStringProperty(kOfxImageEffectPropComponents);
+			// First set the input texture (updates params_)
+			input_clip->setInputTexture(input_tex, frame);
+			// Then get the bitdepth/component from the instance
+			std::string bitdepth = input_clip->getUnmappedBitDepth();
+			std::string component = input_clip->getUnmappedComponents();
 			VideoParams params = input_tex->params();
-			params.set_format(PixelFormat::from_ofx(bitdepth));
-			params.set_channel_count(component);
+			PixelFormat plugin_format = PixelFormat::from_ofx(bitdepth);
+			if (plugin_format != PixelFormat::INVALID) {
+				params.set_format(plugin_format);
+			}
+			if (!component.empty() && component != kOfxImageComponentNone) {
+				params.set_channel_count(component);
+			}
 			ConvertTextureForParams(input_tex, params);
 			OfxRectD rod;
 			rod.x1 = 0;
@@ -1511,7 +1517,6 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 			rod.x2 = params.width() * params.pixel_aspect_ratio().toDouble();
 			rod.y2 = params.height();
 			input_clip->setRegionOfDefinition(rod, frame);
-			input_clip->setInputTexture(input_tex,frame);
 			input_clips[entry.first] = input_clip;
 		}
 	}
@@ -1525,13 +1530,20 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 	}
 	// set correct format for output
 	VideoParams output_params = destination_params; // params for plugin
-	std::string bitdepth =
-		output_clip->getProps().getStringProperty(kOfxImageEffectPropPixelDepth);
-	std::string component =
-		output_clip->getProps().getStringProperty(kOfxImageEffectPropComponents);
-	output_params.set_format(PixelFormat::from_ofx(bitdepth));
-	output_params.set_channel_count(component);
+	// First set the destination params on the clip
 	output_clip->setParams(output_params);
+	// Get the plugin's preferred bitdepth/component from the instance (not descriptor)
+	// Use getUnmappedBitDepth/Components which use the instance's params_
+	std::string bitdepth = output_clip->getUnmappedBitDepth();
+	std::string component = output_clip->getUnmappedComponents();
+	// If plugin returns a valid format different from destination, update output_params
+	PixelFormat plugin_format = PixelFormat::from_ofx(bitdepth);
+	if (plugin_format != PixelFormat::INVALID) {
+		output_params.set_format(plugin_format);
+	}
+	if (!component.empty() && component != kOfxImageComponentNone) {
+		output_params.set_channel_count(component);
+	}
 
 	// The render window is in pixel coordinates
 	// ie: render scale and a PAR of not 1

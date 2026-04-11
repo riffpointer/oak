@@ -481,6 +481,15 @@ void olive::plugin::OliveClipInstance::setDefaultRegionOfDefinition(
 {
 	defaultRegionOfDefinitions_ = regionOfDefinition;
 }
+
+void olive::plugin::OliveClipInstance::setParams(const VideoParams &params)
+{
+	params_ = params;
+	// Sync with OpenFX Host Support's _pixelDepth and _components
+	setPixelDepth(getUnmappedBitDepth());
+	setComponents(getUnmappedComponents());
+}
+
 void olive::plugin::OliveClipInstance::setInputTexture(TexturePtr texture, OfxTime time){
 	if (!texture) {
 		return;
@@ -488,6 +497,9 @@ void olive::plugin::OliveClipInstance::setInputTexture(TexturePtr texture, OfxTi
 	VideoParams incoming = texture->params();
 	
 	this->params_ = incoming;
+	// Sync with OpenFX Host Support's _pixelDepth and _components
+	setPixelDepth(getUnmappedBitDepth());
+	setComponents(getUnmappedComponents());
 #ifdef OFX_SUPPORTS_OPENGLRENDER
 	input_textures_.insert(time, texture);
 #endif
