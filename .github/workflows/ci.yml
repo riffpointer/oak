@@ -182,3 +182,45 @@ jobs:
         run: |
           Write-Host "Running plugin subsystem smoke tests..."
           & "$env:GITHUB_WORKSPACE\build\tests\gtest\olive-gtest.exe" --gtest_filter="PluginSmoke*"
+
+      - name: Audio Smoke Tests (Linux)
+        if: runner.os == 'Linux'
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          echo "Running audio subsystem smoke tests..."
+          ./build/tests/gtest/olive-gtest --gtest_filter="AudioSmoke*"
+
+      - name: Audio Smoke Tests (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          echo "Running audio subsystem smoke tests..."
+          ./build/tests/gtest/olive-gtest --gtest_filter="AudioSmoke*"
+
+      - name: Audio Smoke Tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "Running audio subsystem smoke tests..."
+          & "$env:GITHUB_WORKSPACE\build\tests\gtest\olive-gtest.exe" --gtest_filter="AudioSmoke*"
+
+      - name: Viewer Smoke Tests (Linux)
+        if: runner.os == 'Linux'
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          echo "Running viewer/preview subsystem smoke tests..."
+          ./build/tests/gtest/olive-gtest --gtest_filter="ViewerSmoke*"
+
+      - name: Viewer Smoke Tests (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          echo "Running viewer/preview subsystem smoke tests..."
+          ./build/tests/gtest/olive-gtest --gtest_filter="ViewerSmoke*"
+
+      - name: Viewer Smoke Tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "Running viewer/preview subsystem smoke tests..."
+          & "$env:GITHUB_WORKSPACE\build\tests\gtest\olive-gtest.exe" --gtest_filter="ViewerSmoke*"

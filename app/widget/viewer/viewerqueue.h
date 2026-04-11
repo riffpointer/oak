@@ -22,6 +22,8 @@
 #ifndef VIEWERQUEUE_H
 #define VIEWERQUEUE_H
 
+#include <QVariant>
+
 #include "codec/frame.h"
 
 namespace olive
@@ -62,5 +64,7 @@ public:
 };
 
 }
+
+Q_DECLARE_METATYPE(olive::ViewerPlaybackFrame)
 
 #endif // VIEWERQUEUE_H

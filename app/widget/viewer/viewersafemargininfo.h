@@ -33,6 +33,7 @@ class ViewerSafeMarginInfo {
 public:
 	ViewerSafeMarginInfo()
 		: enabled_(false)
+		, ratio_(0.0)
 	{
 	}
 

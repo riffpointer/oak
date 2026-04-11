@@ -1099,16 +1099,22 @@ void ViewerWidget::PlayInternal(int speed, bool in_to_out_only)
 	if (ap.is_valid() && ap.channel_count() != 0) {
 		UpdateAudioProcessor();
 
-		AudioManager::instance()->SetOutputNotifyInterval(
-			audio_processor_.to().time_to_bytes(kAudioPlaybackInterval));
-		connect(AudioManager::instance(), &AudioManager::OutputNotify, this,
-				&ViewerWidget::QueueNextAudioBuffer);
+		// Verify audio processor output params are valid before using them
+		AudioParams output_params = audio_processor_.to();
+		if (!output_params.is_valid()) {
+			qWarning() << "Audio processor output params are invalid, skipping audio playback";
+		} else {
+			AudioManager::instance()->SetOutputNotifyInterval(
+				output_params.time_to_bytes(kAudioPlaybackInterval));
+			connect(AudioManager::instance(), &AudioManager::OutputNotify, this,
+					&ViewerWidget::QueueNextAudioBuffer);
 
-		static const int prequeue_count = 2;
-		prequeuing_audio_ = prequeue_count; // Queue two buffers ahead of time
-		audio_playback_queue_time_ = GetConnectedNode()->GetPlayhead();
-		for (int i = 0; i < prequeue_count; i++) {
-			QueueNextAudioBuffer();
+			static const int prequeue_count = 2;
+			prequeuing_audio_ = prequeue_count; // Queue two buffers ahead of time
+			audio_playback_queue_time_ = GetConnectedNode()->GetPlayhead();
+			for (int i = 0; i < prequeue_count; i++) {
+				QueueNextAudioBuffer();
+			}
 		}
 	}
 
