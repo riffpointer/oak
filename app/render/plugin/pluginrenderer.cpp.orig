@@ -703,13 +703,12 @@ static olive::AVFramePtr create_avframe_from_ofx_image(OFX::Host::ImageEffect::I
 	return frame;
 }
 
-// 前置声明：必要时将 AVFrame 转换为目标 VideoParams 对应格式。
-// Forward declaration: Convert AVFrame to match destination VideoParams when needed.
+// Forward declaration
 static olive::AVFramePtr ConvertFrameIfNeeded(olive::AVFramePtr src,
 											  const olive::VideoParams &dst_params);
 
-// 作用：按指定 VideoParams 复制 OFX Image 到 AVFrame，必要时做格式转换。
-// Purpose: Copy OFX Image data into an AVFrame using target VideoParams with format conversion.
+// 作用：按指定 VideoParams 复制 OFX Image 到 AVFrame。
+// Purpose: Copy OFX Image data into an AVFrame using target VideoParams.
 static olive::AVFramePtr create_avframe_from_ofx_image_with_params(
 	OFX::Host::ImageEffect::Image &image,
 	const olive::VideoParams &params)
@@ -727,22 +726,36 @@ static olive::AVFramePtr create_avframe_from_ofx_image_with_params(
 		return nullptr;
 	}
 
-	// Get ACTUAL source format from image properties
+	AVPixelFormat pix_fmt = GetDestinationAVPixelFormat(params);
+	if (pix_fmt == AV_PIX_FMT_NONE) {
+		return nullptr;
+	}
+
+	// Get the ACTUAL format from the image properties (not from params)
+	// The image may have a different format than params (e.g., plugin
+	// requested U16 but params is U8)
 	std::string image_depth = image.getStringProperty(kOfxImageEffectPropPixelDepth);
 	std::string image_comp = image.getStringProperty(kOfxImageEffectPropComponents);
 	
-	int src_channel_count = 4;
-	if (image_comp == kOfxImageComponentRGB) src_channel_count = 3;
-	else if (image_comp == kOfxImageComponentAlpha) src_channel_count = 1;
+	int image_channel_count = 4; // default to RGBA
+	if (image_comp == kOfxImageComponentRGB) {
+		image_channel_count = 3;
+	} else if (image_comp == kOfxImageComponentAlpha) {
+		image_channel_count = 1;
+	}
 	
-	int src_bytes_per_component = 1;
-	if (image_depth == kOfxBitDepthShort) src_bytes_per_component = 2;
-	else if (image_depth == kOfxBitDepthHalf) src_bytes_per_component = 2;
-	else if (image_depth == kOfxBitDepthFloat) src_bytes_per_component = 4;
+	int bytes_per_component = 1; // default to 8-bit
+	if (image_depth == kOfxBitDepthShort) {
+		bytes_per_component = 2;
+	} else if (image_depth == kOfxBitDepthHalf || image_depth == kOfxBitDepthFloat) {
+		bytes_per_component = 4;
+	}
 	
-	const int src_bytes_per_pixel = src_channel_count * src_bytes_per_component;
-	const int dst_bytes_per_pixel = params.channel_count() * params.format().byte_count();
-	
+	const int src_bytes_per_pixel = image_channel_count * bytes_per_component;
+	if (src_bytes_per_pixel <= 0) {
+		return nullptr;
+	}
+
 	int row_bytes = image.getIntProperty(kOfxImagePropRowBytes);
 	if (row_bytes <= 0) {
 		row_bytes = width * src_bytes_per_pixel;
@@ -750,50 +763,6 @@ static olive::AVFramePtr create_avframe_from_ofx_image_with_params(
 
 	uint8_t *src = static_cast<uint8_t *>(data_ptr);
 	src += bounds[1] * row_bytes + bounds[0] * src_bytes_per_pixel;
-
-	// Check if format conversion is needed
-	bool needs_conversion = (src_bytes_per_pixel != dst_bytes_per_pixel) || 
-							(src_channel_count != params.channel_count());
-	
-	if (needs_conversion) {
-		// Create source frame with actual format
-		AVPixelFormat src_fmt = AV_PIX_FMT_NONE;
-		if (src_channel_count == 4) {
-			if (src_bytes_per_component == 1) src_fmt = AV_PIX_FMT_RGBA;
-			else if (src_bytes_per_component == 2) src_fmt = AV_PIX_FMT_RGBA64LE;
-			else if (src_bytes_per_component == 4) src_fmt = AV_PIX_FMT_RGBAF32LE;
-		} else if (src_channel_count == 3) {
-			if (src_bytes_per_component == 1) src_fmt = AV_PIX_FMT_RGB24;
-			else if (src_bytes_per_component == 2) src_fmt = AV_PIX_FMT_RGB48LE;
-			else if (src_bytes_per_component == 4) src_fmt = AV_PIX_FMT_RGBF32LE;
-		} else if (src_channel_count == 1) {
-			if (src_bytes_per_component == 1) src_fmt = AV_PIX_FMT_GRAY8;
-			else if (src_bytes_per_component == 2) src_fmt = AV_PIX_FMT_GRAY16LE;
-			else if (src_bytes_per_component == 4) src_fmt = AV_PIX_FMT_GRAYF32LE;
-		}
-		
-		if (src_fmt != AV_PIX_FMT_NONE) {
-			olive::AVFramePtr src_frame = olive::CreateAVFramePtr();
-			src_frame->width = width;
-			src_frame->height = height;
-			src_frame->format = src_fmt;
-			if (av_frame_get_buffer(src_frame.get(), 0) >= 0) {
-				// Copy source data row by row
-				for (int y = 0; y < height; ++y) {
-					memcpy(src_frame->data[0] + y * src_frame->linesize[0],
-						   src + y * row_bytes, width * src_bytes_per_pixel);
-				}
-				// Convert to destination format
-				return ConvertFrameIfNeeded(src_frame, params);
-			}
-		}
-	}
-
-	// Same format - direct copy
-	AVPixelFormat pix_fmt = GetDestinationAVPixelFormat(params);
-	if (pix_fmt == AV_PIX_FMT_NONE) {
-		return nullptr;
-	}
 
 	olive::AVFramePtr frame = olive::CreateAVFramePtr();
 	frame->width = width;
@@ -804,10 +773,69 @@ static olive::AVFramePtr create_avframe_from_ofx_image_with_params(
 		return nullptr;
 	}
 
-	const int copy_bytes = width * std::min(src_bytes_per_pixel, dst_bytes_per_pixel);
+	// Debug output
+	qDebug() << "OFX output image:" 
+			 << "depth=" << QString::fromStdString(image_depth)
+			 << "comp=" << QString::fromStdString(image_comp)
+			 << "ch=" << image_channel_count
+			 << "bpc=" << bytes_per_component
+			 << "src_bpp=" << src_bytes_per_pixel
+			 << "row_bytes=" << row_bytes
+			 << "bounds=" << bounds[0] << bounds[1] << bounds[2] << bounds[3]
+			 << "width=" << width << "height=" << height
+			 << "dst_params_fmt=" << static_cast<int>(params.format())
+			 << "dst_params_ch=" << params.channel_count()
+			 << "dst_pix_fmt=" << pix_fmt
+			 << "dst_linesize=" << frame->linesize[0];
+
+	// Check if we need format conversion
+	bool needs_conversion = false;
+	if (params.format().byte_count() != bytes_per_component ||
+		params.channel_count() != image_channel_count) {
+		needs_conversion = true;
+	}
+	
+	if (needs_conversion) {
+		// Create a temporary AVFrame with the source format
+		AVPixelFormat src_pix_fmt = AV_PIX_FMT_NONE;
+		if (image_channel_count == 4) {
+			if (bytes_per_component == 1) src_pix_fmt = AV_PIX_FMT_RGBA;
+			else if (bytes_per_component == 2) src_pix_fmt = AV_PIX_FMT_RGBA64;
+			else if (bytes_per_component == 4) src_pix_fmt = AV_PIX_FMT_RGBAF32;
+		} else if (image_channel_count == 3) {
+			if (bytes_per_component == 1) src_pix_fmt = AV_PIX_FMT_RGB24;
+			else if (bytes_per_component == 2) src_pix_fmt = AV_PIX_FMT_RGB48;
+		}
+		
+		if (src_pix_fmt != AV_PIX_FMT_NONE) {
+			olive::AVFramePtr src_frame = olive::CreateAVFramePtr();
+			src_frame->width = width;
+			src_frame->height = height;
+			src_frame->format = src_pix_fmt;
+			
+			// Allocate buffer for source frame
+			if (av_frame_get_buffer(src_frame.get(), 0) < 0) {
+				return nullptr;
+			}
+			
+			// Copy data to source frame
+			for (int y = 0; y < height; ++y) {
+				std::memcpy(src_frame->data[0] + y * src_frame->linesize[0],
+							src + y * row_bytes,
+							width * src_bytes_per_pixel);
+			}
+			
+			// Use ConvertFrameIfNeeded for format conversion
+			return ConvertFrameIfNeeded(src_frame, params);
+		}
+	}
+	
+	// Same format - direct copy
+	const int copy_bytes = width * src_bytes_per_pixel;
 	for (int y = 0; y < height; ++y) {
-		memcpy(frame->data[0] + y * frame->linesize[0],
-			   src + y * row_bytes, copy_bytes);
+		std::memcpy(frame->data[0] + y * frame->linesize[0],
+					src + y * row_bytes,
+					copy_bytes);
 	}
 
 	return frame;
@@ -1549,7 +1577,10 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 			input_tex->handleFrame(ptr);
 		}
 		if (is_usable_input(input_tex)) {
-			// Determine the plugin's preferred format for this clip
+			input_textures[entry.first] = input_tex;
+			// First set the input texture (updates params_)
+			input_clip->setInputTexture(input_tex, frame);
+			// Then get the bitdepth/component from the instance
 			std::string bitdepth = input_clip->getUnmappedBitDepth();
 			std::string component = input_clip->getUnmappedComponents();
 			VideoParams params = input_tex->params();
@@ -1560,17 +1591,11 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 			if (!component.empty() && component != kOfxImageComponentNone) {
 				params.set_channel_count(component);
 			}
-			// Convert the texture to the plugin's preferred format BEFORE
-			// setting it on the clip, so the OFX Image receives correctly
-			// formatted pixel data.
-			TexturePtr converted_tex =
-				ConvertTextureForParams(input_tex, params);
-			if (converted_tex && is_usable_input(converted_tex)) {
+			TexturePtr converted_tex = ConvertTextureForParams(input_tex, params);
+			if (converted_tex) {
 				input_tex = converted_tex;
+				input_textures[entry.first] = converted_tex;
 			}
-			input_textures[entry.first] = input_tex;
-			// Now set the (possibly converted) texture on the clip
-			input_clip->setInputTexture(input_tex, frame);
 			OfxRectD rod;
 			rod.x1 = 0;
 			rod.y1 = 0;
@@ -1604,6 +1629,9 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 	if (!component.empty() && component != kOfxImageComponentNone) {
 		output_params.set_channel_count(component);
 	}
+	// CRITICAL: Update params_ with the final format that plugin expects
+	// so getOutputImage creates the image with correct format
+	output_clip->setParams(output_params);
 
 	// The render window is in pixel coordinates
 	// ie: render scale and a PAR of not 1
@@ -1682,7 +1710,7 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 									  renderScale, true, interactive);
 			return;
 		}
-		} else {
+	} else {
 		if (!destination || !destination->id().isValid()) {
 #ifdef OFX_SUPPORTS_OPENGLRENDER
 			DetachOutputTexture();
@@ -1694,10 +1722,11 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 		}
 	}
 
+		qDebug() << "RenderPlugin: destination_params fmt=" << static_cast<int>(destination_params.format()) << "ch=" << destination_params.channel_count() << "dest->params fmt=" << static_cast<int>(destination->params().format()) << "ch=" << destination->params().channel_count();
 	if (!use_opengl) {
 		AVFramePtr frame_ptr = 
 			create_avframe_from_ofx_image_with_params(*output_image,
-													  output_params);
+													  destination_params);
 		if (!frame_ptr) {
 			qWarning().noquote()
 				<< "OFX output image conversion failed for plugin="

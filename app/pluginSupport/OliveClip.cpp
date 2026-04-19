@@ -293,6 +293,13 @@ static olive::AVFramePtr ConvertPackedFloatFrame(olive::AVFramePtr src,
 
 const std::string &olive::plugin::OliveClipInstance::getUnmappedBitDepth() const
 {
+	// Return the plugin's preferred pixel depth from base class
+	// This is set during getClipPreferences action via setPixelDepth()
+	const std::string &depth = getPixelDepth();
+	if (!depth.empty() && depth != kBitDepthNoneStr) {
+		return depth;
+	}
+	// Fallback to params_ if base class value is not set
 	switch (params_.format()) {
 	case PixelFormat::INVALID:
 		return kBitDepthNoneStr;
@@ -311,6 +318,13 @@ const std::string &olive::plugin::OliveClipInstance::getUnmappedBitDepth() const
 const std::string &
 olive::plugin::OliveClipInstance::getUnmappedComponents() const
 {
+	// Return the plugin's preferred components from base class
+	// This is set during getClipPreferences action via setComponents()
+	const std::string &comp = getComponents();
+	if (!comp.empty() && comp != kImageComponentNoneStr) {
+		return comp;
+	}
+	// Fallback to params_ if base class value is not set
 	switch (params_.channel_count()) {
 	case 1:
 		return kImageComponentAlphaStr;
@@ -429,13 +443,35 @@ olive::plugin::OliveClipInstance::getImage(OfxTime time,
 			return image;
 		}
 
+		// If this input clip was never populated (no setInputTexture call),
+		// return nullptr so the plugin knows no image is available.
+		// This prevents EXC_BAD_ACCESS when plugins (e.g. ofxsMaskMixPix)
+		// try to read pixel data from an empty/invalid image buffer.
+		if (!getConnected()) {
+			return nullptr;
+		}
+
 		// Fetch on demand for the input clip.
-		// It does get deleted after the plugin is done with it as we
-		// have not incremented the auto ref
-		//
-		// You should do somewhat more sophisticated image management
-		// than this.
-		Image *image = new Image(*this, params_, bounds, rod, true);
+		// Use plugin-preferred params to ensure the image format matches
+		// what the plugin expects (may differ from input texture format)
+		VideoParams preferred_params = getPluginPreferredParams();
+		if (preferred_params.format() == core::PixelFormat::INVALID) {
+			preferred_params = params_;
+		}
+		// Keep dimensions and other settings from params_
+		preferred_params.set_width(params_.width());
+		preferred_params.set_height(params_.height());
+		preferred_params.set_pixel_aspect_ratio(params_.pixel_aspect_ratio());
+
+		// Guard against zero-size or invalid-format images that would
+		// cause EXC_BAD_ACCESS when the plugin accesses pixel data.
+		if (preferred_params.width() <= 0 || preferred_params.height() <= 0 ||
+			preferred_params.format() == core::PixelFormat::INVALID ||
+			preferred_params.channel_count() <= 0) {
+			return nullptr;
+		}
+		
+		Image *image = new Image(*this, preferred_params, bounds, rod, true);
 		return image;
 	}
 }
@@ -454,9 +490,53 @@ olive::plugin::OliveClipInstance::getOutputImage(OfxTime time)
 					 static_cast<int>(std::ceil(rod_d.y2)) };
 	OfxRectI bounds = rod;
 
-	auto image = new Image(*this, params_, bounds, rod, true);
+	// Use plugin-preferred params instead of params_ to ensure the image
+	// is created with the format the plugin expects
+	VideoParams preferred_params = getPluginPreferredParams();
+	if (preferred_params.format() == core::PixelFormat::INVALID) {
+		preferred_params = params_;
+	}
+	// Keep the dimensions and other settings from params_
+	preferred_params.set_width(params_.width());
+	preferred_params.set_height(params_.height());
+	preferred_params.set_pixel_aspect_ratio(params_.pixel_aspect_ratio());
+
+	auto image = new Image(*this, preferred_params, bounds, rod, true);
 	images_.insert(time, image);
 	return image;
+}
+
+olive::VideoParams olive::plugin::OliveClipInstance::getPluginPreferredParams() const
+{
+	VideoParams result = params_;
+	
+	// Get format from base class _pixelDepth (set by getClipPreferences)
+	const std::string &depth = getPixelDepth();
+	if (!depth.empty()) {
+		if (depth == kOfxBitDepthByte) {
+			result.set_format(core::PixelFormat::U8);
+		} else if (depth == kOfxBitDepthShort) {
+			result.set_format(core::PixelFormat::U16);
+		} else if (depth == kOfxBitDepthHalf) {
+			result.set_format(core::PixelFormat::F16);
+		} else if (depth == kOfxBitDepthFloat) {
+			result.set_format(core::PixelFormat::F32);
+		}
+	}
+	
+	// Get channel count from base class _components (set by getClipPreferences)
+	const std::string &comp = getComponents();
+	if (!comp.empty()) {
+		if (comp == kOfxImageComponentRGBA) {
+			result.set_channel_count(4);
+		} else if (comp == kOfxImageComponentRGB) {
+			result.set_channel_count(3);
+		} else if (comp == kOfxImageComponentAlpha) {
+			result.set_channel_count(1);
+		}
+	}
+	
+	return result;
 }
 OfxRectD
 olive::plugin::OliveClipInstance::getRegionOfDefinition(OfxTime time) const
@@ -497,9 +577,11 @@ void olive::plugin::OliveClipInstance::setInputTexture(TexturePtr texture, OfxTi
 	VideoParams incoming = texture->params();
 	
 	this->params_ = incoming;
-	// Sync with OpenFX Host Support's _pixelDepth and _components
-	setPixelDepth(getUnmappedBitDepth());
-	setComponents(getUnmappedComponents());
+	// Note: We do NOT call setPixelDepth/setComponents here because
+	// those should be set by getClipPreferences to reflect the PLUGIN's
+	// preferred format, not the input texture's format.
+	// The base class values are used by getUnmappedBitDepth/Components
+	// to report plugin capabilities to the plugin itself.
 #ifdef OFX_SUPPORTS_OPENGLRENDER
 	input_textures_.insert(time, texture);
 #endif

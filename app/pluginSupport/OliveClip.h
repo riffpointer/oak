@@ -72,6 +72,9 @@ public:
 	void setInputTexture(TexturePtr texture, OfxTime time);
 	void setOutputTexture(TexturePtr texture, OfxTime time);
 
+	// Get the plugin-preferred VideoParams based on base class _pixelDepth/_components
+	VideoParams getPluginPreferredParams() const;
+
 private:
 	VideoParams params_;
 
