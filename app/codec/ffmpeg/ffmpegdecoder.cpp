@@ -125,6 +125,24 @@ TexturePtr FFmpegDecoder::ProcessFrameIntoTexture(AVFramePtr f,
 												instance_.avstream(), nullptr),
 				   VideoParams::kInterlaceNone, p.divider);
 
+	// For YUV formats, force the output texture to F32 RGBA for maximum precision
+	switch (f->format) {
+	case AV_PIX_FMT_YUV420P:
+	case AV_PIX_FMT_YUV422P:
+	case AV_PIX_FMT_YUV444P:
+	case AV_PIX_FMT_YUV420P10LE:
+	case AV_PIX_FMT_YUV422P10LE:
+	case AV_PIX_FMT_YUV444P10LE:
+	case AV_PIX_FMT_YUV420P12LE:
+	case AV_PIX_FMT_YUV422P12LE:
+	case AV_PIX_FMT_YUV444P12LE:
+		vp.set_format(PixelFormat::F32);
+		vp.set_channel_count(VideoParams::kRGBAChannelCount);
+		break;
+	default:
+		break;
+	}
+
 	// Create texture
 	TexturePtr tex = p.renderer->CreateTexture(vp);
 
@@ -243,6 +261,11 @@ TexturePtr FFmpegDecoder::ProcessFrameIntoTexture(AVFramePtr f,
 	case AV_PIX_FMT_RGBA:
 	case AV_PIX_FMT_RGBA64LE:
 		// RGBA can be uploaded directly to the texture
+		tex->handleFrame(f);
+		tex->Upload(f->data[0], f->linesize[0] / vp.GetBytesPerPixel());
+		break;
+	case AV_PIX_FMT_RGBAF32:
+		// RGBA F32 can be uploaded directly to the texture
 		tex->handleFrame(f);
 		tex->Upload(f->data[0], f->linesize[0] / vp.GetBytesPerPixel());
 		break;
@@ -752,6 +775,9 @@ PixelFormat FFmpegDecoder::GetNativePixelFormat(AVPixelFormat pix_fmt)
 	case AV_PIX_FMT_RGB48:
 	case AV_PIX_FMT_RGBA64:
 		return PixelFormat::U16;
+	case AV_PIX_FMT_RGBF32:
+	case AV_PIX_FMT_RGBAF32:
+		return PixelFormat::F32;
 	default:
 		return PixelFormat::INVALID;
 	}
@@ -762,9 +788,11 @@ int FFmpegDecoder::GetNativeChannelCount(AVPixelFormat pix_fmt)
 	switch (pix_fmt) {
 	case AV_PIX_FMT_RGB24:
 	case AV_PIX_FMT_RGB48:
+	case AV_PIX_FMT_RGBF32:
 		return VideoParams::kRGBChannelCount;
 	case AV_PIX_FMT_RGBA:
 	case AV_PIX_FMT_RGBA64:
+	case AV_PIX_FMT_RGBAF32:
 		return VideoParams::kRGBAChannelCount;
 	default:
 		return 0;
@@ -807,6 +835,7 @@ bool FFmpegDecoder::IsPixelFormatGLSLCompatible(AVPixelFormat f)
 	case AV_PIX_FMT_YUV444P12LE:
 	case AV_PIX_FMT_RGBA:
 	case AV_PIX_FMT_RGBA64LE:
+	case AV_PIX_FMT_RGBAF32:
 		return true;
 	default:
 		return false;
@@ -854,6 +883,11 @@ AVFramePtr FFmpegDecoder::PreProcessFrame(AVFramePtr f,
 			static_cast<AVPixelFormat>(dest->format))) {
 		dest->format = FFmpegUtils::GetCompatiblePixelFormat(
 			static_cast<AVPixelFormat>(dest->format), p.maximum_format);
+	}
+
+	// swscale does not support RGBAF32 as output, fallback to RGBA64
+	if (dest->format == AV_PIX_FMT_RGBAF32) {
+		dest->format = AV_PIX_FMT_RGBA64;
 	}
 
 	int r = av_frame_get_buffer(dest.get(), 0);

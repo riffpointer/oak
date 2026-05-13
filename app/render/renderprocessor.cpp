@@ -165,7 +165,8 @@ void RenderProcessor::Run()
 	SetCancelPointer(ticket_->GetCancelAtom());
 
 	VideoParams params=ticket_->property("vparam").value<VideoParams>();
-	SetCacheVideoParams(ticket_->property("vparam").value<VideoParams>());
+	params.set_format(PixelFormat::F32);
+	SetCacheVideoParams(params);
 	SetCacheAudioParams(ticket_->property("aparam").value<AudioParams>());
 
 	if (IsCancelled()) {

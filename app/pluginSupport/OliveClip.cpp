@@ -443,14 +443,6 @@ olive::plugin::OliveClipInstance::getImage(OfxTime time,
 			return image;
 		}
 
-		// If this input clip was never populated (no setInputTexture call),
-		// return nullptr so the plugin knows no image is available.
-		// This prevents EXC_BAD_ACCESS when plugins (e.g. ofxsMaskMixPix)
-		// try to read pixel data from an empty/invalid image buffer.
-		if (!getConnected()) {
-			return nullptr;
-		}
-
 		// Fetch on demand for the input clip.
 		// Use plugin-preferred params to ensure the image format matches
 		// what the plugin expects (may differ from input texture format)

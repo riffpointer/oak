@@ -159,6 +159,17 @@ TexturePtr OIIODecoder::RetrieveVideoInternal(const RetrieveVideoParams &p)
 		}
 	}
 
+	// Force F32 output for all still images
+	if (vp.format() != PixelFormat::F32) {
+		FramePtr f32_frame = buffer_.convert(PixelFormat::F32);
+		if (f32_frame) {
+			VideoParams f32_vp = vp;
+			f32_vp.set_format(PixelFormat::F32);
+			return p.renderer->CreateTexture(f32_vp, f32_frame->data(),
+											 f32_frame->linesize_pixels());
+		}
+	}
+
 	return p.renderer->CreateTexture(vp, buffer_.data(),
 									 buffer_.linesize_pixels());
 }

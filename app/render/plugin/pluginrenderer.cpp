@@ -489,9 +489,12 @@ static void ChooseSupportedOutputParams(
 	}
 }
 
-static olive::TexturePtr ConvertTextureForParams(
-	olive::TexturePtr src,
-	const olive::VideoParams &dst_params);
+// Forward declarations for functions defined later in this file.
+static olive::AVFramePtr ConvertFrameIfNeeded(olive::AVFramePtr src,
+											  const olive::VideoParams &dst_params,
+											  olive::Renderer *renderer);
+static olive::TexturePtr ConvertTextureForParams(olive::TexturePtr src,
+												 const olive::VideoParams &dst_params);
 
 // 作用：根据插件能力与偏好选择输入格式并执行转换。
 // Purpose: Select a supported input format and convert texture for the clip.
@@ -705,14 +708,13 @@ static olive::AVFramePtr create_avframe_from_ofx_image(OFX::Host::ImageEffect::I
 
 // 前置声明：必要时将 AVFrame 转换为目标 VideoParams 对应格式。
 // Forward declaration: Convert AVFrame to match destination VideoParams when needed.
-static olive::AVFramePtr ConvertFrameIfNeeded(olive::AVFramePtr src,
-											  const olive::VideoParams &dst_params);
 
 // 作用：按指定 VideoParams 复制 OFX Image 到 AVFrame，必要时做格式转换。
 // Purpose: Copy OFX Image data into an AVFrame using target VideoParams with format conversion.
 static olive::AVFramePtr create_avframe_from_ofx_image_with_params(
 	OFX::Host::ImageEffect::Image &image,
-	const olive::VideoParams &params)
+	const olive::VideoParams &params,
+	olive::Renderer *renderer = nullptr)
 {
 	void *data_ptr = image.getPointerProperty(kOfxImagePropData);
 	if (!data_ptr) {
@@ -730,19 +732,21 @@ static olive::AVFramePtr create_avframe_from_ofx_image_with_params(
 	// Get ACTUAL source format from image properties
 	std::string image_depth = image.getStringProperty(kOfxImageEffectPropPixelDepth);
 	std::string image_comp = image.getStringProperty(kOfxImageEffectPropComponents);
-	
+
 	int src_channel_count = 4;
 	if (image_comp == kOfxImageComponentRGB) src_channel_count = 3;
 	else if (image_comp == kOfxImageComponentAlpha) src_channel_count = 1;
-	
+
+	// NOTE: FP16 (Half) format handling has been removed.
+	// FP16 data is now treated as U16 (2 bytes per component) and converted via FFmpeg.
 	int src_bytes_per_component = 1;
 	if (image_depth == kOfxBitDepthShort) src_bytes_per_component = 2;
-	else if (image_depth == kOfxBitDepthHalf) src_bytes_per_component = 2;
+	else if (image_depth == kOfxBitDepthHalf) src_bytes_per_component = 2; // Treat as U16
 	else if (image_depth == kOfxBitDepthFloat) src_bytes_per_component = 4;
-	
+
 	const int src_bytes_per_pixel = src_channel_count * src_bytes_per_component;
 	const int dst_bytes_per_pixel = params.channel_count() * params.format().byte_count();
-	
+
 	int row_bytes = image.getIntProperty(kOfxImagePropRowBytes);
 	if (row_bytes <= 0) {
 		row_bytes = width * src_bytes_per_pixel;
@@ -752,12 +756,13 @@ static olive::AVFramePtr create_avframe_from_ofx_image_with_params(
 	src += bounds[1] * row_bytes + bounds[0] * src_bytes_per_pixel;
 
 	// Check if format conversion is needed
-	bool needs_conversion = (src_bytes_per_pixel != dst_bytes_per_pixel) || 
+	bool needs_conversion = (src_bytes_per_pixel != dst_bytes_per_pixel) ||
 							(src_channel_count != params.channel_count());
-	
+
 	if (needs_conversion) {
 		// Create source frame with actual format
 		AVPixelFormat src_fmt = AV_PIX_FMT_NONE;
+
 		if (src_channel_count == 4) {
 			if (src_bytes_per_component == 1) src_fmt = AV_PIX_FMT_RGBA;
 			else if (src_bytes_per_component == 2) src_fmt = AV_PIX_FMT_RGBA64LE;
@@ -771,21 +776,29 @@ static olive::AVFramePtr create_avframe_from_ofx_image_with_params(
 			else if (src_bytes_per_component == 2) src_fmt = AV_PIX_FMT_GRAY16LE;
 			else if (src_bytes_per_component == 4) src_fmt = AV_PIX_FMT_GRAYF32LE;
 		}
-		
+
+
+
 		if (src_fmt != AV_PIX_FMT_NONE) {
 			olive::AVFramePtr src_frame = olive::CreateAVFramePtr();
 			src_frame->width = width;
 			src_frame->height = height;
 			src_frame->format = src_fmt;
 			if (av_frame_get_buffer(src_frame.get(), 0) >= 0) {
+
 				// Copy source data row by row
 				for (int y = 0; y < height; ++y) {
 					memcpy(src_frame->data[0] + y * src_frame->linesize[0],
 						   src + y * row_bytes, width * src_bytes_per_pixel);
 				}
 				// Convert to destination format
-				return ConvertFrameIfNeeded(src_frame, params);
+				return ConvertFrameIfNeeded(src_frame, params, renderer);
+			} else {
+				qWarning().noquote() << "[WARN] av_frame_get_buffer failed for src_fmt=" << src_fmt;
 			}
+		} else {
+			qWarning().noquote()
+				<< "[WARN] src_fmt is NONE for depth=" << QString::fromStdString(image_depth);
 		}
 	}
 
@@ -945,10 +958,45 @@ int olive::plugin::detail::BytesToPixels(int byte_linesize,
 	return byte_linesize / bytes_per_pixel;
 }
 
+// 作用：将 AVPixelFormat 映射为 Olive 的 PixelFormat 和通道数（仅常见 packed 格式）。
+static void GetOliveFormatFromAV(AVPixelFormat fmt, olive::core::PixelFormat *out_fmt, int *out_ch)
+{
+	switch (fmt) {
+	case AV_PIX_FMT_GRAY8:
+		*out_fmt = olive::core::PixelFormat::U8; *out_ch = 1; return;
+	case AV_PIX_FMT_RGB24:
+		*out_fmt = olive::core::PixelFormat::U8; *out_ch = 3; return;
+	case AV_PIX_FMT_RGBA:
+		*out_fmt = olive::core::PixelFormat::U8; *out_ch = 4; return;
+	case AV_PIX_FMT_GRAY16LE:
+	case AV_PIX_FMT_GRAY16BE:
+		*out_fmt = olive::core::PixelFormat::U16; *out_ch = 1; return;
+	case AV_PIX_FMT_RGB48LE:
+	case AV_PIX_FMT_RGB48BE:
+		*out_fmt = olive::core::PixelFormat::U16; *out_ch = 3; return;
+	case AV_PIX_FMT_RGBA64LE:
+	case AV_PIX_FMT_RGBA64BE:
+		*out_fmt = olive::core::PixelFormat::U16; *out_ch = 4; return;
+	case AV_PIX_FMT_GRAYF32LE:
+	case AV_PIX_FMT_GRAYF32BE:
+		*out_fmt = olive::core::PixelFormat::F32; *out_ch = 1; return;
+	case AV_PIX_FMT_RGBF32LE:
+	case AV_PIX_FMT_RGBF32BE:
+		*out_fmt = olive::core::PixelFormat::F32; *out_ch = 3; return;
+	case AV_PIX_FMT_RGBAF32LE:
+	case AV_PIX_FMT_RGBAF32BE:
+		*out_fmt = olive::core::PixelFormat::F32; *out_ch = 4; return;
+	default:
+		*out_fmt = olive::core::PixelFormat::INVALID; *out_ch = 0; return;
+	}
+}
+
 // 作用：必要时将 AVFrame 转换为目标 VideoParams 对应格式。
-// Purpose: Convert AVFrame to match destination VideoParams when needed.
+//       优先使用 FFmpeg sws_scale；若不支持且 renderer 可用，则走 GPU 路径。
+//       删除所有手写 CPU 像素循环，避免精度损失与性能瓶颈。
 static olive::AVFramePtr ConvertFrameIfNeeded(olive::AVFramePtr src,
-											  const olive::VideoParams &dst_params)
+											  const olive::VideoParams &dst_params,
+											  olive::Renderer *renderer = nullptr)
 {
 	if (!src) {
 		return nullptr;
@@ -959,6 +1007,7 @@ static olive::AVFramePtr ConvertFrameIfNeeded(olive::AVFramePtr src,
 		return src;
 	}
 
+	// Same format & size, no conversion needed
 	if (src->format == dst_fmt &&
 		src->width == dst_params.width() &&
 		src->height == dst_params.height()) {
@@ -970,256 +1019,61 @@ static olive::AVFramePtr ConvertFrameIfNeeded(olive::AVFramePtr src,
 	dst->width = dst_params.width();
 	dst->height = dst_params.height();
 	if (av_frame_get_buffer(dst.get(), 0) < 0) {
+		qWarning().noquote() << "[WARN] av_frame_get_buffer failed for dst_fmt=" << dst_fmt;
 		return src;
 	}
 
-	auto float_channels = [](AVPixelFormat fmt) -> int {
-		switch (fmt) {
-		case AV_PIX_FMT_GRAYF32LE:
-		case AV_PIX_FMT_GRAYF32BE:
-			return 1;
-		case AV_PIX_FMT_RGBF32LE:
-		case AV_PIX_FMT_RGBF32BE:
-			return 3;
-		case AV_PIX_FMT_RGBAF32LE:
-		case AV_PIX_FMT_RGBAF32BE:
-			return 4;
-		default:
-			return 0;
-		}
-	};
-
-	auto dst_packed_info = [](AVPixelFormat fmt, int *channels,
-							  int *bytes_per_component) -> bool {
-		switch (fmt) {
-		case AV_PIX_FMT_GRAY8:
-			*channels = 1;
-			*bytes_per_component = 1;
-			return true;
-		case AV_PIX_FMT_RGB24:
-			*channels = 3;
-			*bytes_per_component = 1;
-			return true;
-		case AV_PIX_FMT_RGBA:
-			*channels = 4;
-			*bytes_per_component = 1;
-			return true;
-		case AV_PIX_FMT_GRAY16LE:
-			*channels = 1;
-			*bytes_per_component = 2;
-			return true;
-		case AV_PIX_FMT_RGB48LE:
-			*channels = 3;
-			*bytes_per_component = 2;
-			return true;
-		case AV_PIX_FMT_RGBA64LE:
-			*channels = 4;
-			*bytes_per_component = 2;
-			return true;
-		default:
-			return false;
-		}
-	};
-
-	auto float_dst_from_packed = [&](const olive::AVFramePtr &packed_src,
-									 AVPixelFormat float_fmt,
-									 const olive::AVFramePtr &float_dst) -> bool {
-		if (!packed_src || !float_dst || !packed_src->data[0] ||
-			!float_dst->data[0]) {
-			return false;
-		}
-		const int dst_channels = float_channels(float_fmt);
-		if (dst_channels == 0) {
-			return false;
-		}
-		int src_channels = 0;
-		int bytes_per_component = 0;
-		if (!dst_packed_info(static_cast<AVPixelFormat>(packed_src->format),
-							 &src_channels, &bytes_per_component)) {
-			return false;
-		}
-		const float inv_scale =
-			(bytes_per_component == 2) ? (1.0f / 65535.0f)
-									   : (1.0f / 255.0f);
-		for (int y = 0; y < packed_src->height; ++y) {
-			const uint8_t *src_row =
-				packed_src->data[0] + y * packed_src->linesize[0];
-			float *dst_row = reinterpret_cast<float *>(
-				float_dst->data[0] + y * float_dst->linesize[0]);
-			if (bytes_per_component == 2) {
-				const uint16_t *src_u16 =
-					reinterpret_cast<const uint16_t *>(src_row);
-				for (int x = 0; x < packed_src->width; ++x) {
-					const uint16_t *pix = src_u16 + x * src_channels;
-					float r = pix[0] * inv_scale;
-					float g = (src_channels > 1) ? pix[1] * inv_scale : r;
-					float b = (src_channels > 2) ? pix[2] * inv_scale : r;
-					float a = (src_channels > 3) ? pix[3] * inv_scale : 1.0f;
-					dst_row[x * dst_channels + 0] = r;
-					if (dst_channels > 1) {
-						dst_row[x * dst_channels + 1] = g;
-					}
-					if (dst_channels > 2) {
-						dst_row[x * dst_channels + 2] = b;
-					}
-					if (dst_channels > 3) {
-						dst_row[x * dst_channels + 3] = a;
-					}
-				}
-			} else {
-				for (int x = 0; x < packed_src->width; ++x) {
-					const uint8_t *pix = src_row + x * src_channels;
-					float r = pix[0] * inv_scale;
-					float g = (src_channels > 1) ? pix[1] * inv_scale : r;
-					float b = (src_channels > 2) ? pix[2] * inv_scale : r;
-					float a = (src_channels > 3) ? pix[3] * inv_scale : 1.0f;
-					dst_row[x * dst_channels + 0] = r;
-					if (dst_channels > 1) {
-						dst_row[x * dst_channels + 1] = g;
-					}
-					if (dst_channels > 2) {
-						dst_row[x * dst_channels + 2] = b;
-					}
-					if (dst_channels > 3) {
-						dst_row[x * dst_channels + 3] = a;
-					}
-				}
-			}
-		}
-		return true;
-	};
-
-	const int dst_float_channels = float_channels(dst_fmt);
-	if (dst_float_channels > 0) {
-		int src_channels = 0;
-		int bytes_per_component = 0;
-		if (dst_packed_info(static_cast<AVPixelFormat>(src->format),
-							&src_channels, &bytes_per_component)) {
-			if (float_dst_from_packed(src, dst_fmt, dst)) {
-				return dst;
-			}
-		} else {
-			olive::AVFramePtr packed = olive::CreateAVFramePtr();
-			AVPixelFormat packed_fmt = (dst_float_channels == 4)
-										   ? AV_PIX_FMT_RGBA
-										   : (dst_float_channels == 3)
-												 ? AV_PIX_FMT_RGB24
-												 : AV_PIX_FMT_GRAY8;
-			packed->format = packed_fmt;
-			packed->width = dst->width;
-			packed->height = dst->height;
-			if (av_frame_get_buffer(packed.get(), 0) >= 0) {
-				SwsContext *pre_ctx = sws_getContext(
-					src->width, src->height,
-					static_cast<AVPixelFormat>(src->format),
-					packed->width, packed->height, packed_fmt, SWS_POINT,
-					nullptr, nullptr, nullptr);
-				if (pre_ctx) {
-					sws_scale(pre_ctx, src->data, src->linesize, 0, src->height,
-							  packed->data, packed->linesize);
-					sws_freeContext(pre_ctx);
-					if (float_dst_from_packed(packed, dst_fmt, dst)) {
-						return dst;
-					}
-				}
-			}
-		}
-	}
-
-	auto clamp01 = [](float v) -> float {
-		return std::clamp(v, 0.0f, 1.0f);
-	};
-
-	const int src_float_channels = float_channels(
-		static_cast<AVPixelFormat>(src->format));
-	if (src_float_channels > 0) {
-		int dst_channels = 0;
-		int bytes_per_component = 0;
-		if (dst_packed_info(dst_fmt, &dst_channels, &bytes_per_component) &&
-			src->data[0] && dst->data[0]) {
-			for (int y = 0; y < src->height; ++y) {
-				const float *src_row = reinterpret_cast<const float *>(
-					src->data[0] + y * src->linesize[0]);
-				uint8_t *dst_row = dst->data[0] + y * dst->linesize[0];
-				if (bytes_per_component == 2) {
-					auto *dst_row_u16 =
-						reinterpret_cast<uint16_t *>(dst_row);
-					for (int x = 0; x < src->width; ++x) {
-						const float *pix =
-							src_row + x * src_float_channels;
-						float r = pix[0];
-						float g = (src_float_channels > 1) ? pix[1] : r;
-						float b = (src_float_channels > 2) ? pix[2] : r;
-						float a = (src_float_channels > 3) ? pix[3] : 1.0f;
-						if (dst_channels == 1) {
-							float luma = 0.2126f * r + 0.7152f * g + 0.0722f * b;
-							dst_row_u16[x] = static_cast<uint16_t>(
-								std::lround(clamp01(luma) * 65535.0f));
-							continue;
-						}
-						dst_row_u16[x * dst_channels + 0] =
-							static_cast<uint16_t>(
-								std::lround(clamp01(r) * 65535.0f));
-						dst_row_u16[x * dst_channels + 1] =
-							static_cast<uint16_t>(
-								std::lround(clamp01(g) * 65535.0f));
-						dst_row_u16[x * dst_channels + 2] =
-							static_cast<uint16_t>(
-								std::lround(clamp01(b) * 65535.0f));
-						if (dst_channels == 4) {
-							dst_row_u16[x * dst_channels + 3] =
-								static_cast<uint16_t>(
-									std::lround(clamp01(a) * 65535.0f));
-						}
-					}
-				} else {
-					for (int x = 0; x < src->width; ++x) {
-						const float *pix =
-							src_row + x * src_float_channels;
-						float r = pix[0];
-						float g = (src_float_channels > 1) ? pix[1] : r;
-						float b = (src_float_channels > 2) ? pix[2] : r;
-						float a = (src_float_channels > 3) ? pix[3] : 1.0f;
-						if (dst_channels == 1) {
-							float luma = 0.2126f * r + 0.7152f * g + 0.0722f * b;
-							dst_row[x] = static_cast<uint8_t>(
-								std::lround(clamp01(luma) * 255.0f));
-							continue;
-						}
-						dst_row[x * dst_channels + 0] =
-							static_cast<uint8_t>(
-								std::lround(clamp01(r) * 255.0f));
-						dst_row[x * dst_channels + 1] =
-							static_cast<uint8_t>(
-								std::lround(clamp01(g) * 255.0f));
-						dst_row[x * dst_channels + 2] =
-							static_cast<uint8_t>(
-								std::lround(clamp01(b) * 255.0f));
-						if (dst_channels == 4) {
-							dst_row[x * dst_channels + 3] =
-								static_cast<uint8_t>(
-									std::lround(clamp01(a) * 255.0f));
-						}
-					}
-				}
-			}
-			return dst;
-		}
-	}
-
+	// Try FFmpeg sws_scale first
 	SwsContext *sws_ctx = sws_getContext(
 		src->width, src->height, static_cast<AVPixelFormat>(src->format),
 		dst->width, dst->height, dst_fmt, SWS_POINT,
 		nullptr, nullptr, nullptr);
-	if (!sws_ctx) {
-		return src;
+	if (sws_ctx) {
+		int ret = sws_scale(sws_ctx, src->data, src->linesize, 0, src->height,
+							dst->data, dst->linesize);
+		sws_freeContext(sws_ctx);
+		if (ret > 0) {
+			return dst;
+		}
 	}
 
-	sws_scale(sws_ctx, src->data, src->linesize, 0, src->height,
-			  dst->data, dst->linesize);
-	sws_freeContext(sws_ctx);
+	// sws_scale failed (e.g. RGBAF32 not supported). Use GPU if renderer available.
+	if (renderer && src->data[0]) {
+		olive::core::PixelFormat src_fmt;
+		int src_ch;
+		GetOliveFormatFromAV(static_cast<AVPixelFormat>(src->format), &src_fmt, &src_ch);
+		if (src_fmt != olive::core::PixelFormat::INVALID && src_ch > 0) {
+			olive::VideoParams src_vp(src->width, src->height, src_fmt, src_ch);
+			int src_bpp = olive::VideoParams::GetBytesPerPixel(src_fmt, src_ch);
+			int src_linesize_pixels = (src_bpp > 0) ? src->linesize[0] / src_bpp : src->width;
 
-	return dst;
+			olive::TexturePtr src_tex = renderer->CreateTexture(
+				src_vp, src->data[0], src_linesize_pixels);
+			if (src_tex) {
+				olive::TexturePtr dst_tex = renderer->CreateTexture(dst_params);
+				if (dst_tex) {
+					olive::ShaderJob job;
+					job.Insert(QStringLiteral("ove_maintex"),
+							   olive::NodeValue(olive::NodeValue::kTexture,
+												QVariant::fromValue(src_tex)));
+					renderer->BlitToTexture(renderer->GetDefaultShader(), job,
+											dst_tex.get(), false);
+
+					// Download result back to AVFrame
+					int dst_bpp = dst_params.GetBytesPerPixel();
+					int dst_linesize_pixels = (dst_bpp > 0) ? dst->linesize[0] / dst_bpp : dst->width;
+					dst_tex->Download(dst->data[0], dst_linesize_pixels);
+					return dst;
+				}
+			}
+		}
+	}
+
+	qWarning().noquote()
+		<< "[WARN] ConvertFrameIfNeeded failed (sws_scale + GPU both unavailable). "
+		<< "Returning unconverted source. src_fmt=" << src->format
+		<< " dst_fmt=" << dst_fmt;
+	return src;
 }
 
 // 作用：从字节行跨度换算像素行跨度。
@@ -1234,8 +1088,8 @@ static int LinesizeToPixels(const olive::VideoParams &params, int linesize_bytes
 	return linesize_bytes / bytes_per_pixel;
 }
 
-// 作用：将纹理转换为指定 VideoParams（CPU 路径，必要时回读）。
-// Purpose: Convert texture to target VideoParams (CPU path with readback).
+// 作用：将纹理转换为指定 VideoParams。优先使用 GPU shader 做格式转换，
+//       避免 CPU 回读/转换/上传的性能损失和精度损失。
 static olive::TexturePtr ConvertTextureForParams(olive::TexturePtr src,
 												 const olive::VideoParams &dst_params)
 {
@@ -1250,6 +1104,23 @@ static olive::TexturePtr ConvertTextureForParams(olive::TexturePtr src,
 		return src;
 	}
 
+	// GPU path: blit directly to destination format using default shader.
+	// OpenGL texture sampling automatically normalizes U8/U16 to float,
+	// and write-out quantizes float back to U8/U16 when needed.
+	if (auto *renderer = src->renderer()) {
+		olive::TexturePtr dst = renderer->CreateTexture(dst_params);
+		if (dst) {
+			olive::ShaderJob job;
+			job.Insert(QStringLiteral("ove_maintex"),
+					   olive::NodeValue(olive::NodeValue::kTexture,
+										QVariant::fromValue(src)));
+			renderer->BlitToTexture(renderer->GetDefaultShader(), job, dst.get(),
+									false);
+			return dst;
+		}
+	}
+
+	// CPU fallback: readback, sws_scale, re-upload
 	olive::AVFramePtr frame = src->frame();
 	if (!frame || !frame->data[0]) {
 		frame = ReadbackTextureToFrame(src, src_params);
@@ -1258,7 +1129,7 @@ static olive::TexturePtr ConvertTextureForParams(olive::TexturePtr src,
 		return nullptr;
 	}
 
-	olive::AVFramePtr converted = ConvertFrameIfNeeded(frame, dst_params);
+	olive::AVFramePtr converted = ConvertFrameIfNeeded(frame, dst_params, nullptr);
 	if (!converted || !converted->data[0]) {
 		return nullptr;
 	}
@@ -1289,6 +1160,7 @@ static olive::TexturePtr ConvertTextureForParams(olive::TexturePtr src,
 	}
 	return dst;
 }
+
 
 // 作用：安全获取插件标识符，便于日志输出。
 // Purpose: Safely fetch plugin identifier for logging.
@@ -1387,7 +1259,72 @@ static olive::AVFramePtr DownloadTextureToFrame(const olive::TexturePtr &tex)
 	const olive::VideoParams &params = tex->params();
 	return ReadbackTextureToFrame(tex, params);
 }
+inline std::vector<std::string> GetPluginSupportedDepths(const OFX::Host::ImageEffect::Descriptor& desc)
+{
+	std::vector<std::string> depths;
+	const OFX::Host::Property::Set& props = desc.getProps();
 
+	// 获取数组维度（支持几种深度）
+	int dim = props.getDimension(kOfxImageEffectPropSupportedPixelDepths);
+	for (int i = 0; i < dim; ++i) {
+		// Host Support Library 返回 const std::string&
+		const std::string& val = props.getStringProperty(
+			kOfxImageEffectPropSupportedPixelDepths,
+			i
+		);
+		if (!val.empty() && val != kOfxBitDepthNone) {
+			depths.push_back(val);
+		}
+	}
+	return depths;
+}
+
+// 查询插件/宿主是否支持「各 clip 不同深度」
+inline bool SupportsMultipleClipDepths(const OFX::Host::ImageEffect::Descriptor& desc)
+{
+	const OFX::Host::Property::Set& props = desc.getProps();
+	// 这是单值 int 属性（0 或 1），n = 0
+	int val = props.getIntProperty(kOfxImageEffectPropSupportsMultipleClipDepths, 0);
+	return val != 0;
+}
+
+// 作用：根据插件描述符声明的 kOfxImageEffectPropSupportedPixelDepths，
+//       按优先级 F32 > U16 > U8 > F16 选择最佳输入像素格式。
+//       参考 OpenFX API: OfxImageEffectPropSupportedPixelDepths
+// Purpose: Select best input pixel format from plugin descriptor's supported
+//          depth list. Priority: F32 > U16 > U8 > F16.
+static PixelFormat SelectBestPluginInputFormat(
+	const OFX::Host::ImageEffect::Descriptor& desc)
+{
+	const OFX::Host::Property::Set& props = desc.getProps();
+	int dim = props.getDimension(kOfxImageEffectPropSupportedPixelDepths);
+
+	bool supports_f32 = false;
+	bool supports_u16 = false;
+	bool supports_u8  = false;
+	bool supports_f16 = false;
+
+	for (int i = 0; i < dim; ++i) {
+		const std::string& depth = props.getStringProperty(
+			kOfxImageEffectPropSupportedPixelDepths, i);
+		if (depth == kOfxBitDepthFloat) {
+			supports_f32 = true;
+		} else if (depth == kOfxBitDepthShort) {
+			supports_u16 = true;
+		} else if (depth == kOfxBitDepthByte) {
+			supports_u8 = true;
+		} else if (depth == kOfxBitDepthHalf) {
+			supports_f16 = true;
+		}
+	}
+
+	// 优先级：F32 > U16 > U8 > F16
+	if (supports_f32) return PixelFormat::F32;
+	if (supports_u16) return PixelFormat::U16;
+	if (supports_u8)  return PixelFormat::U8;
+	if (supports_f16) return PixelFormat::F16;
+	return PixelFormat::INVALID;
+}
 // 作用：执行 OFX 插件渲染全流程（准备输入、调用动作、处理输出）。
 // Purpose: Run full OFX plugin render flow (inputs, actions, outputs).
 void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::PluginJob& job,
@@ -1494,7 +1431,7 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 			input_clips[entry.first] = input_clip;
 		}
 	}
-	
+
 	// call getClipPreferences to know which format plugin requires
 	OFX::Host::Property::Set args;
 	args.setDoubleProperty(kOfxPropTime, frame);
@@ -1530,9 +1467,11 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 	// effect needs to render a given frame (clipped to the RoD).
 	//
 	// In our example we are doing full frame fetches regardless.
-	
+
 
 	// set correct format for input
+
+	auto &descriptor = instance->getDescriptor();
 	for (const auto &entry : input_clips) {
 		if (entry.first == kOfxImageEffectOutputClipName) {
 			continue;
@@ -1549,27 +1488,23 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 			input_tex->handleFrame(ptr);
 		}
 		if (is_usable_input(input_tex)) {
-			// Determine the plugin's preferred format for this clip
-			std::string bitdepth = input_clip->getUnmappedBitDepth();
-			std::string component = input_clip->getUnmappedComponents();
+			// Query the plugin descriptor for supported pixel depths and pick
+			// the best one according to our priority: F32 > U16 > U8 > F16.
+			// OpenFX reference: kOfxImageEffectPropSupportedPixelDepths on
+			// the image effect descriptor lists all depths the plugin can handle.
+			PixelFormat chosen_fmt = SelectBestPluginInputFormat(descriptor);
 			VideoParams params = input_tex->params();
-			PixelFormat plugin_format = PixelFormat::from_ofx(bitdepth);
-			if (plugin_format != PixelFormat::INVALID) {
-				params.set_format(plugin_format);
+
+			if (chosen_fmt != PixelFormat::INVALID && params.format() != chosen_fmt) {
+				params.set_format(chosen_fmt);
+				TexturePtr converted_tex =
+					ConvertTextureForParams(input_tex, params);
+				if (converted_tex && is_usable_input(converted_tex)) {
+					input_tex = converted_tex;
+					input_textures[entry.first] = input_tex;
+				}
 			}
-			if (!component.empty() && component != kOfxImageComponentNone) {
-				params.set_channel_count(component);
-			}
-			// Convert the texture to the plugin's preferred format BEFORE
-			// setting it on the clip, so the OFX Image receives correctly
-			// formatted pixel data.
-			TexturePtr converted_tex =
-				ConvertTextureForParams(input_tex, params);
-			if (converted_tex && is_usable_input(converted_tex)) {
-				input_tex = converted_tex;
-			}
-			input_textures[entry.first] = input_tex;
-			// Now set the (possibly converted) texture on the clip
+
 			input_clip->setInputTexture(input_tex, frame);
 			OfxRectD rod;
 			rod.x1 = 0;
@@ -1589,21 +1524,22 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 		return;
 	}
 	// set correct format for output
-	VideoParams output_params = destination_params; // params for plugin
-	// First set the destination params on the clip
-	output_clip->setParams(output_params);
-	// Get the plugin's preferred bitdepth/component from the instance (not descriptor)
-	// Use getUnmappedBitDepth/Components which use the instance's params_
-	std::string bitdepth = output_clip->getUnmappedBitDepth();
-	std::string component = output_clip->getUnmappedComponents();
-	// If plugin returns a valid format different from destination, update output_params
-	PixelFormat plugin_format = PixelFormat::from_ofx(bitdepth);
-	if (plugin_format != PixelFormat::INVALID) {
-		output_params.set_format(plugin_format);
+	// Query plugin-supported depths and pick best according to our priority:
+	// F32 > U16 > U8 > F16. If plugin supports F32 we render directly to F32
+	// (zero conversion). If plugin only supports U8/U16 we let it render in
+	// that format and ConvertFrameIfNeeded will convert back to F32 afterwards.
+	VideoParams output_params = destination_params;
+	PixelFormat best_fmt = SelectBestPluginInputFormat(descriptor);
+	if (best_fmt != PixelFormat::INVALID) {
+		output_params.set_format(best_fmt);
 	}
+	output_clip->setParams(output_params);
+	std::string component = output_clip->getUnmappedComponents();
 	if (!component.empty() && component != kOfxImageComponentNone) {
 		output_params.set_channel_count(component);
 	}
+	// Re-set params so the clip knows the possibly-changed channel count
+	output_clip->setParams(output_params);
 
 	// The render window is in pixel coordinates
 	// ie: render scale and a PAR of not 1
@@ -1612,7 +1548,7 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 	renderWindow.x2 = destination_params.width();
 	renderWindow.y2 = destination_params.height();
 
-	
+
 	stat = instance->beginRenderAction(frame, numFramesToRender,
 		1.0, false, renderScale, true,
 		interactive);
@@ -1628,7 +1564,7 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 		AttachOutputTexture(destination);
 	}
 #endif
-	
+
 
 	if (!output_params.is_valid()) {
 		qWarning().noquote()
@@ -1695,7 +1631,7 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 	}
 
 	if (!use_opengl) {
-		AVFramePtr frame_ptr = 
+		AVFramePtr frame_ptr =
 			create_avframe_from_ofx_image_with_params(*output_image,
 													  output_params);
 		if (!frame_ptr) {
@@ -1706,7 +1642,7 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 							  renderScale, true, interactive);
 			return;
 		}
-		AVFramePtr converted = ConvertFrameIfNeeded(frame_ptr, destination_params);
+		AVFramePtr converted = ConvertFrameIfNeeded(frame_ptr, destination_params, this);
 		const AVPixelFormat expected_fmt =
 			GetDestinationAVPixelFormat(destination_params);
 		destination->handleFrame(converted);
@@ -1733,7 +1669,7 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 #endif
 		if (frame_ptr && destination) {
 			AVFramePtr converted =
-				ConvertFrameIfNeeded(frame_ptr, destination_params);
+				ConvertFrameIfNeeded(frame_ptr, destination_params, this);
 			const AVPixelFormat expected_fmt =
 				GetDestinationAVPixelFormat(destination_params);
 			destination->handleFrame(converted);

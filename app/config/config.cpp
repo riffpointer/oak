@@ -249,7 +249,7 @@ void Config::SetDefaults()
 	SetEntryInternal(QStringLiteral("OnlinePixelFormat"), NodeValue::kInt,
 					 PixelFormat::F32);
 	SetEntryInternal(QStringLiteral("OfflinePixelFormat"), NodeValue::kInt,
-					 PixelFormat::F16);
+					 PixelFormat::F32);
 
 	SetEntryInternal(QStringLiteral("MarkerColor"), NodeValue::kInt,
 					 ColorCoding::kLime);

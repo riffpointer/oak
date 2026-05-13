@@ -28,7 +28,7 @@ AVPixelFormat
 FFmpegUtils::GetCompatiblePixelFormat(const AVPixelFormat &pix_fmt,
 									  PixelFormat maximum)
 {
-	AVPixelFormat possible_pix_fmts[3];
+	AVPixelFormat possible_pix_fmts[4];
 
 	possible_pix_fmts[0] = AV_PIX_FMT_RGBA;
 
@@ -36,7 +36,12 @@ FFmpegUtils::GetCompatiblePixelFormat(const AVPixelFormat &pix_fmt,
 		possible_pix_fmts[1] = AV_PIX_FMT_NONE;
 	} else {
 		possible_pix_fmts[1] = AV_PIX_FMT_RGBA64;
-		possible_pix_fmts[2] = AV_PIX_FMT_NONE;
+		if (maximum == PixelFormat::F32) {
+			possible_pix_fmts[2] = AV_PIX_FMT_RGBAF32;
+			possible_pix_fmts[3] = AV_PIX_FMT_NONE;
+		} else {
+			possible_pix_fmts[2] = AV_PIX_FMT_NONE;
+		}
 	}
 
 	return avcodec_find_best_pix_fmt_of_list(possible_pix_fmts, pix_fmt, 1,
