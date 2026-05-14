@@ -85,8 +85,9 @@ protected:
 	OFX::Host::Param::Descriptor *_descriptor;
 public:
 	PushbuttonInstance(std::shared_ptr<PluginNode> effect, const std::string &name,
-					   OFX::Host::Param::Descriptor &descriptor)
-		: OFX::Host::Param::PushbuttonInstance(descriptor)
+					   OFX::Host::Param::Descriptor &descriptor,
+					   OFX::Host::Param::SetInstance *paramSet = nullptr)
+		: OFX::Host::Param::PushbuttonInstance(descriptor, paramSet)
 		, node(effect)
 	{
 		_descriptor = &descriptor;
@@ -106,8 +107,9 @@ protected:
 	bool has_value_ = false;
 	int value_ = 0;
 public:
-	IntegerInstance(std::shared_ptr<PluginNode>node, OFX::Host::Param::Descriptor &descriptor)
-		: OFX::Host::Param::IntegerInstance(descriptor)
+	IntegerInstance(std::shared_ptr<PluginNode>node, OFX::Host::Param::Descriptor &descriptor,
+				  OFX::Host::Param::SetInstance *paramSet = nullptr)
+		: OFX::Host::Param::IntegerInstance(descriptor, paramSet)
 		, _node(node)
 		, _descriptor(descriptor)
 	{}
@@ -191,8 +193,9 @@ protected:
 	bool has_value_ = false;
 	double value_ = 0.0;
 public:
-	DoubleInstance(std::shared_ptr<PluginNode> effect, const std::string& name, OFX::Host::Param::Descriptor& descriptor)
-		: OFX::Host::Param::DoubleInstance(descriptor)
+	DoubleInstance(std::shared_ptr<PluginNode> effect, const std::string& name, OFX::Host::Param::Descriptor& descriptor,
+				 OFX::Host::Param::SetInstance *paramSet = nullptr)
+		: OFX::Host::Param::DoubleInstance(descriptor, paramSet)
 		, node(effect)
 		, _descriptor(descriptor)
 	{
@@ -305,8 +308,9 @@ protected:
 			.getIntProperty(kOfxParamPropDefault) != 0;
 	}
 public:
-	BooleanInstance(std::shared_ptr<PluginNode> effect, const std::string& name, OFX::Host::Param::Descriptor& descriptor)
-		: OFX::Host::Param::BooleanInstance(descriptor)
+	BooleanInstance(std::shared_ptr<PluginNode> effect, const std::string& name, OFX::Host::Param::Descriptor& descriptor,
+				  OFX::Host::Param::SetInstance *paramSet = nullptr)
+		: OFX::Host::Param::BooleanInstance(descriptor, paramSet)
 		, node(effect)
 		, _descriptor(descriptor)
 	{
@@ -392,8 +396,9 @@ protected:
 	bool has_value_ = false;
 	int value_ = 0;
 public:
-	ChoiceInstance(std::shared_ptr<PluginNode> effect,  const std::string& name, OFX::Host::Param::Descriptor& descriptor)
-		: OFX::Host::Param::ChoiceInstance(descriptor)
+	ChoiceInstance(std::shared_ptr<PluginNode> effect,  const std::string& name, OFX::Host::Param::Descriptor& descriptor,
+				 OFX::Host::Param::SetInstance *paramSet = nullptr)
+		: OFX::Host::Param::ChoiceInstance(descriptor, paramSet)
 		, node(effect)
 		, _descriptor(descriptor)
 	{
@@ -471,8 +476,9 @@ protected:
 	bool has_value_ = false;
 	double value_[4] = {0.0, 0.0, 0.0, 0.0};
 public:
-	RGBAInstance(std::shared_ptr<PluginNode> effect, const std::string& name, OFX::Host::Param::Descriptor& descriptor)
-		: OFX::Host::Param::RGBAInstance(descriptor)
+	RGBAInstance(std::shared_ptr<PluginNode> effect, const std::string& name, OFX::Host::Param::Descriptor& descriptor,
+				 OFX::Host::Param::SetInstance *paramSet = nullptr)
+		: OFX::Host::Param::RGBAInstance(descriptor, paramSet)
 		, node(effect)
 		, _descriptor(descriptor)
 	{
@@ -581,8 +587,9 @@ protected:
 	bool has_value_ = false;
 	double value_[3] = {0.0, 0.0, 0.0};
 public:
-	RGBInstance(std::shared_ptr<PluginNode> effect,  const std::string& name, OFX::Host::Param::Descriptor& descriptor)
-		: OFX::Host::Param::RGBInstance(descriptor)
+	RGBInstance(std::shared_ptr<PluginNode> effect,  const std::string& name, OFX::Host::Param::Descriptor& descriptor,
+				OFX::Host::Param::SetInstance *paramSet = nullptr)
+		: OFX::Host::Param::RGBInstance(descriptor, paramSet)
 		, node(effect)
 		, _descriptor(descriptor)
 	{
@@ -682,8 +689,9 @@ protected:
 	bool has_value_ = false;
 	double value_[2] = {0.0, 0.0};
 public:
-	Double2DInstance(std::shared_ptr<PluginNode> effect, const std::string& name, OFX::Host::Param::Descriptor& descriptor)
-		: OFX::Host::Param::Double2DInstance(descriptor)
+	Double2DInstance(std::shared_ptr<PluginNode> effect, const std::string& name, OFX::Host::Param::Descriptor& descriptor,
+					 OFX::Host::Param::SetInstance *paramSet = nullptr)
+		: OFX::Host::Param::Double2DInstance(descriptor, paramSet)
 		, node(effect)
 		, _descriptor(descriptor)
 	{
@@ -798,8 +806,9 @@ protected:
 	bool has_value_ = false;
 	int value_[2] = {0, 0};
 public:
-	Integer2DInstance(std::shared_ptr<PluginNode> effect,  const std::string& name, OFX::Host::Param::Descriptor& descriptor)
-		: OFX::Host::Param::Integer2DInstance(descriptor)
+	Integer2DInstance(std::shared_ptr<PluginNode> effect,  const std::string& name, OFX::Host::Param::Descriptor& descriptor,
+					  OFX::Host::Param::SetInstance *paramSet = nullptr)
+		: OFX::Host::Param::Integer2DInstance(descriptor, paramSet)
 		, node(effect)
 		, _descriptor(descriptor)
 	{
@@ -889,8 +898,9 @@ protected:
 	double value_[3] = {0.0, 0.0, 0.0};
 public:
 	Double3DInstance(std::shared_ptr<PluginNode> effect, const std::string& name,
-					 OFX::Host::Param::Descriptor& descriptor)
-		: OFX::Host::Param::Double3DInstance(descriptor)
+					 OFX::Host::Param::Descriptor& descriptor,
+					 OFX::Host::Param::SetInstance *paramSet = nullptr)
+		: OFX::Host::Param::Double3DInstance(descriptor, paramSet)
 		, node(effect)
 		, _descriptor(descriptor)
 	{
@@ -1018,8 +1028,9 @@ protected:
 	int value_[3] = {0, 0, 0};
 public:
 	Integer3DInstance(std::shared_ptr<PluginNode> effect, const std::string& name,
-					  OFX::Host::Param::Descriptor& descriptor)
-		: OFX::Host::Param::Integer3DInstance(descriptor)
+					  OFX::Host::Param::Descriptor& descriptor,
+					  OFX::Host::Param::SetInstance *paramSet = nullptr)
+		: OFX::Host::Param::Integer3DInstance(descriptor, paramSet)
 		, node(effect)
 		, _descriptor(descriptor)
 	{
@@ -1117,8 +1128,9 @@ protected:
 	std::string value_;
 public:
 	StringInstance(std::shared_ptr<PluginNode> effect, const std::string& name,
-				   OFX::Host::Param::Descriptor& descriptor)
-		: OFX::Host::Param::StringInstance(descriptor)
+				   OFX::Host::Param::Descriptor& descriptor,
+				   OFX::Host::Param::SetInstance *paramSet = nullptr)
+		: OFX::Host::Param::StringInstance(descriptor, paramSet)
 		, node(effect)
 		, _descriptor(descriptor)
 	{
@@ -1198,8 +1210,9 @@ protected:
 	std::string value_;
 public:
 	CustomInstance(std::shared_ptr<PluginNode> effect, const std::string& name,
-				   OFX::Host::Param::Descriptor& descriptor)
-		: OFX::Host::Param::CustomInstance(descriptor)
+				   OFX::Host::Param::Descriptor& descriptor,
+				   OFX::Host::Param::SetInstance *paramSet = nullptr)
+		: OFX::Host::Param::CustomInstance(descriptor, paramSet)
 		, node(effect)
 		, _descriptor(descriptor)
 	{
@@ -1280,16 +1293,18 @@ public:
 
 class GroupInstance : public OFX::Host::Param::GroupInstance {
 public:
-	GroupInstance(OFX::Host::Param::Descriptor& descriptor)
-		: OFX::Host::Param::GroupInstance(descriptor)
+	GroupInstance(OFX::Host::Param::Descriptor& descriptor,
+				OFX::Host::Param::SetInstance *paramSet = nullptr)
+		: OFX::Host::Param::GroupInstance(descriptor, paramSet)
 	{
 	}
 };
 
 class PageInstance : public OFX::Host::Param::PageInstance {
 public:
-	PageInstance(OFX::Host::Param::Descriptor& descriptor)
-		: OFX::Host::Param::PageInstance(descriptor)
+	PageInstance(OFX::Host::Param::Descriptor& descriptor,
+			   OFX::Host::Param::SetInstance *paramSet = nullptr)
+		: OFX::Host::Param::PageInstance(descriptor, paramSet)
 	{
 	}
 };

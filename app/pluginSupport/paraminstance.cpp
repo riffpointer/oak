@@ -43,6 +43,12 @@ void SubmitUndoCommand(const std::shared_ptr<PluginNode> &node,
 		}
 	}
 
+	if (!IsGuiThread()) {
+		command->redo_now();
+		delete command;
+		return;
+	}
+
 	Core::instance()->undo_stack()->push(command, label);
 }
 }

@@ -23,6 +23,8 @@
 #define VIEWERQUEUE_H
 
 #include <QVariant>
+#include <QMutex>
+#include <QMutexLocker>
 
 #include "codec/frame.h"
 
@@ -36,10 +38,19 @@ struct ViewerPlaybackFrame {
 
 class ViewerQueue : public std::list<ViewerPlaybackFrame> {
 public:
-	ViewerQueue() = default;
+	ViewerQueue() : mutex_(new QMutex()) {}
+	ViewerQueue(const ViewerQueue &other)
+		: std::list<ViewerPlaybackFrame>(other), mutex_(new QMutex()) {}
+	~ViewerQueue() { delete mutex_; }
+	ViewerQueue &operator=(const ViewerQueue &other)
+	{
+		std::list<ViewerPlaybackFrame>::operator=(other);
+		return *this;
+	}
 
 	void AppendTimewise(const ViewerPlaybackFrame &f, int playback_speed)
 	{
+		QMutexLocker locker(mutex_);
 		if (this->empty() ||
 			(this->back().timestamp < f.timestamp) == (playback_speed > 0)) {
 			this->push_back(f);
@@ -55,12 +66,16 @@ public:
 
 	void PurgeBefore(const rational &time, int playback_speed)
 	{
+		QMutexLocker locker(mutex_);
 		while (!this->empty() &&
 			   ((playback_speed > 0 && this->front().timestamp < time) ||
 				(playback_speed < 0 && this->front().timestamp > time))) {
 			this->pop_front();
 		}
 	}
+
+private:
+	QMutex *mutex_;
 };
 
 }

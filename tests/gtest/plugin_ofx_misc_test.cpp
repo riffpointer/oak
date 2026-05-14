@@ -426,12 +426,18 @@ TEST(PluginMisc, MergeOver)
 		GTEST_SKIP() << "OFX integration test not enabled";
 	}
 	
-	// FIXME: Merge plugin crashes during render. Needs investigation.
-	// The crash happens inside PluginRenderer::RenderPlugin, likely due to:
-	// 1. Multi-input plugin handling issues
-	// 2. Missing parameter initialization for the merge operation
-	// 3. Clip format compatibility issues between A and B inputs
-	GTEST_SKIP() << "Merge plugin crashes - needs fix in multi-input handling";
+	VideoParams params(320, 240, core::PixelFormat::U8, 4);
+	TexturePtr input = CreateSolidTexture(params, 0x80);
+	ASSERT_NE(input, nullptr);
+	
+	NodeValueRow row;
+	row.insert(QString::fromStdString(kOfxImageEffectSimpleSourceClipName),
+			   NodeValue(NodeValue::kTexture, input));
+	row.insert(QStringLiteral("Bg"),
+			   NodeValue(NodeValue::kTexture, input));
+	
+	bool result = RenderPlugin("net.sf.openfx.MergePlugin", params, row, true);
+	EXPECT_TRUE(result) << "Merge plugin should produce output";
 }
 
 // ============================================================================
@@ -444,12 +450,16 @@ TEST(PluginMisc, Keyer)
 		GTEST_SKIP() << "OFX integration test not enabled";
 	}
 	
-	// FIXME: Keyer plugin crashes during render. Needs investigation.
-	// The crash happens inside PluginRenderer::RenderPlugin. Possible causes:
-	// 1. Keyer requires additional optional inputs (Bg, InM, OutM) to be explicitly unset
-	// 2. Parameter initialization issues (keyColor, mode, etc.)
-	// 3. The plugin explicitly disables UByte support, U16/F32 may need special handling
-	GTEST_SKIP() << "Keyer plugin crashes - needs investigation";
+	VideoParams params(320, 240, core::PixelFormat::U16, 4);
+	TexturePtr input = CreateSolidTexture(params, 0x80);
+	ASSERT_NE(input, nullptr);
+	
+	NodeValueRow row;
+	row.insert(QString::fromStdString(kOfxImageEffectSimpleSourceClipName),
+			   NodeValue(NodeValue::kTexture, input));
+	
+	bool result = RenderPlugin("net.sf.openfx.KeyerPlugin", params, row, true);
+	EXPECT_TRUE(result) << "Keyer plugin should produce output";
 }
 
 // ============================================================================

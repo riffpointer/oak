@@ -26,12 +26,23 @@
 #include "undo/undocommand.h"
 
 #include <map>
+#include <QCoreApplication>
 #include <QPointer>
+#include <QThread>
 #include <qcontainerfwd.h>
 #include <qlist.h>
+
 namespace olive {
+
+inline bool IsGuiThread()
+{
+	if (auto *app = QCoreApplication::instance()) {
+		return QThread::currentThread() == app->thread();
+	}
+	return true;
+}
 class ProgressDialog;
-namespace plugin{
+namespace plugin {
 class PluginNode;
 enum class ErrorType{
 	Error,

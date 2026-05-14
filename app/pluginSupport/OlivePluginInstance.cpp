@@ -69,14 +69,6 @@ QString FormatOfxMessage(const char *format, va_list args)
 	return QString::fromUtf8(dynamic_buffer.constData());
 }
 
-bool IsGuiThread()
-{
-	if (auto *app = QCoreApplication::instance()) {
-		return QThread::currentThread() == app->thread();
-	}
-	return true;
-}
-
 const std::string &FieldOrderForParams(const VideoParams &params)
 {
 	switch (params.interlacing()) {
@@ -329,36 +321,36 @@ OlivePluginInstance::newParam(const std::string &name,
 	const std::string &type = desc.getType();
 
 	if (type == kOfxParamTypeInteger) {
-		return new IntegerInstance(node_, desc);
+		return new IntegerInstance(node_, desc, this);
 	} else if (type == kOfxParamTypeDouble) {
-		return new DoubleInstance(node_, name, desc);
+		return new DoubleInstance(node_, name, desc, this);
 	} else if (type == kOfxParamTypeBoolean) {
-		return new BooleanInstance(node_, name, desc);
+		return new BooleanInstance(node_, name, desc, this);
 	} else if (type == kOfxParamTypeChoice) {
-		return new ChoiceInstance(node_, name, desc);
+		return new ChoiceInstance(node_, name, desc, this);
 	} else if (type == kOfxParamTypeString) {
-		return new StringInstance(node_, name, desc);
+		return new StringInstance(node_, name, desc, this);
 	} else if (type == kOfxParamTypeRGBA) {
-		return new RGBAInstance(node_, name, desc);
+		return new RGBAInstance(node_, name, desc, this);
 	} else if (type == kOfxParamTypeRGB) {
-		return new RGBInstance(node_, name, desc);
+		return new RGBInstance(node_, name, desc, this);
 	} else if (type == kOfxParamTypeDouble2D) {
-		return new Double2DInstance(node_, name, desc);
+		return new Double2DInstance(node_, name, desc, this);
 	} else if (type == kOfxParamTypeInteger2D) {
-		return new Integer2DInstance(node_, name, desc);
+		return new Integer2DInstance(node_, name, desc, this);
 	} else if (type == kOfxParamTypeDouble3D) {
-		return new Double3DInstance(node_, name, desc);
+		return new Double3DInstance(node_, name, desc, this);
 	} else if (type == kOfxParamTypeInteger3D) {
-		return new Integer3DInstance(node_, name, desc);
+		return new Integer3DInstance(node_, name, desc, this);
 	} else if (type == kOfxParamTypeCustom ||
 			   type == kOfxParamTypeBytes) {
-		return new CustomInstance(node_, name, desc);
+		return new CustomInstance(node_, name, desc, this);
 	} else if (type == kOfxParamTypeGroup) {
-		return new GroupInstance(desc);
+		return new GroupInstance(desc, this);
 	} else if (type == kOfxParamTypePage) {
-		return new PageInstance(desc);
+		return new PageInstance(desc, this);
 	} else if (type == kOfxParamTypePushButton) {
-		return new PushbuttonInstance(node_, name, desc);
+		return new PushbuttonInstance(node_, name, desc, this);
 	}
 
 	return nullptr; // 未实现的类型
@@ -428,6 +420,12 @@ void OlivePluginInstance::SubmitUndoCommand(UndoCommand *command,
 
 		command->redo_now();
 		edit_command_->add_child(new DeferredRedoCommand(command));
+		return;
+	}
+
+	if (!IsGuiThread()) {
+		command->redo_now();
+		delete command;
 		return;
 	}
 
