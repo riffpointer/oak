@@ -146,11 +146,18 @@ void NodeParamViewWidgetBridge::CreateWidgets()
 			break;
 		}
 		case NodeValue::kColor: {
-			ColorButton *color_button = new ColorButton(
-				GetInnerInput().node()->project()->color_manager(), parent);
-			widgets_.append(color_button);
-			connect(color_button, &ColorButton::ColorChanged, this,
+			if (GetInnerInput().GetProperty("color_semantic")
+					.toString() == QStringLiteral("scalar")) {
+				CreateSliders<FloatSlider>(4, parent);
+			} else {
+				ColorButton *color_button = new ColorButton(
+					GetInnerInput().node()->project()->color_manager(),
+					parent);
+				widgets_.append(color_button);
+				connect(
+					color_button, &ColorButton::ColorChanged, this,
 					&NodeParamViewWidgetBridge::WidgetCallback);
+			}
 			break;
 		}
 		case NodeValue::kText: {
@@ -322,30 +329,42 @@ void NodeParamViewWidgetBridge::WidgetCallback()
 		break;
 	}
 	case NodeValue::kColor: {
-		// Sender is a ColorButton
-		ManagedColor c = static_cast<ColorButton *>(sender())->GetColor();
+		if (GetInnerInput().GetProperty("color_semantic")
+				.toString() == QStringLiteral("scalar")) {
+			FloatSlider *slider =
+				static_cast<FloatSlider *>(sender());
+			ProcessSlider(slider, slider->GetValue());
+		} else {
+			// Sender is a ColorButton
+			ManagedColor c =
+				static_cast<ColorButton *>(sender())->GetColor();
 
-		MultiUndoCommand *command = new MultiUndoCommand();
+			MultiUndoCommand *command = new MultiUndoCommand();
 
-		SetInputValueInternal(c.red(), 0, command, false);
-		SetInputValueInternal(c.green(), 1, command, false);
-		SetInputValueInternal(c.blue(), 2, command, false);
-		SetInputValueInternal(c.alpha(), 3, command, false);
+			SetInputValueInternal(c.red(), 0, command, false);
+			SetInputValueInternal(c.green(), 1, command, false);
+			SetInputValueInternal(c.blue(), 2, command, false);
+			SetInputValueInternal(c.alpha(), 3, command, false);
 
-		Node *n = GetInnerInput().node();
-		n->blockSignals(true);
-		n->SetInputProperty(GetInnerInput().input(),
-							QStringLiteral("col_input"), c.color_input());
-		n->SetInputProperty(GetInnerInput().input(),
-							QStringLiteral("col_display"),
-							c.color_output().display());
-		n->SetInputProperty(GetInnerInput().input(), QStringLiteral("col_view"),
-							c.color_output().view());
-		n->SetInputProperty(GetInnerInput().input(), QStringLiteral("col_look"),
-							c.color_output().look());
-		n->blockSignals(false);
+			Node *n = GetInnerInput().node();
+			n->blockSignals(true);
+			n->SetInputProperty(
+				GetInnerInput().input(), QStringLiteral("col_input"),
+				c.color_input());
+			n->SetInputProperty(
+				GetInnerInput().input(), QStringLiteral("col_display"),
+				c.color_output().display());
+			n->SetInputProperty(
+				GetInnerInput().input(), QStringLiteral("col_view"),
+				c.color_output().view());
+			n->SetInputProperty(
+				GetInnerInput().input(), QStringLiteral("col_look"),
+				c.color_output().look());
+			n->blockSignals(false);
 
-		Core::instance()->undo_stack()->push(command, GetCommandName());
+			Core::instance()->undo_stack()->push(command,
+											 GetCommandName());
+		}
 		break;
 	}
 	case NodeValue::kText: {
@@ -539,18 +558,42 @@ void NodeParamViewWidgetBridge::UpdateWidgetValues()
 		break;
 	}
 	case NodeValue::kColor: {
-		ManagedColor mc =
-			GetInnerInput().GetValueAtTime(node_time).value<Color>();
+		if (GetInnerInput().GetProperty("color_semantic")
+				.toString() == QStringLiteral("scalar")) {
+			Color c = GetInnerInput()
+					  .GetValueAtTime(node_time)
+					  .value<Color>();
+			static_cast<FloatSlider *>(widgets_.at(0))
+				->SetValue(static_cast<double>(c.red()));
+			static_cast<FloatSlider *>(widgets_.at(1))
+				->SetValue(static_cast<double>(c.green()));
+			static_cast<FloatSlider *>(widgets_.at(2))
+				->SetValue(static_cast<double>(c.blue()));
+			static_cast<FloatSlider *>(widgets_.at(3))
+				->SetValue(static_cast<double>(c.alpha()));
+		} else {
+			ManagedColor mc = GetInnerInput()
+							  .GetValueAtTime(node_time)
+							  .value<Color>();
 
-		mc.set_color_input(GetInnerInput().GetProperty("col_input").toString());
+			mc.set_color_input(
+				GetInnerInput().GetProperty("col_input").toString());
 
-		QString d = GetInnerInput().GetProperty("col_display").toString();
-		QString v = GetInnerInput().GetProperty("col_view").toString();
-		QString l = GetInnerInput().GetProperty("col_look").toString();
+			QString d = GetInnerInput()
+						.GetProperty("col_display")
+						.toString();
+			QString v = GetInnerInput()
+						.GetProperty("col_view")
+						.toString();
+			QString l = GetInnerInput()
+						.GetProperty("col_look")
+						.toString();
 
-		mc.set_color_output(ColorTransform(d, v, l));
+			mc.set_color_output(ColorTransform(d, v, l));
 
-		static_cast<ColorButton *>(widgets_.first())->SetColor(mc);
+			static_cast<ColorButton *>(widgets_.first())
+				->SetColor(mc);
+		}
 		break;
 	}
 	case NodeValue::kText: {

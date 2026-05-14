@@ -100,6 +100,99 @@ QVariant DefaultValueForParam(const OFX::Host::Param::Base *param)
 	return QVariant();
 }
 
+/**
+ * @brief Deduce whether an RGB/RGBA parameter semantically represents a color
+ *        pickers or per-channel scalar values (e.g. gamma, contrast).
+ *
+ * Uses heuristics based on label, hint, display range, default values,
+ * and parent group name.
+ */
+QString DeduceColorSemantic(const OFX::Host::Param::Base *param,
+							const QHash<QString, QString> &group_labels)
+{
+	const std::string &ofxType = param->getType();
+	if (ofxType != kOfxParamTypeRGB && ofxType != kOfxParamTypeRGBA) {
+		return QStringLiteral("color");
+	}
+
+	const QString label = QString::fromStdString(param->getLabel()).toLower();
+	const QString hint = QString::fromStdString(param->getHint()).toLower();
+	const QString name = QString::fromStdString(param->getName()).toLower();
+
+	// Rule 1: explicit color keywords → color
+	static const QStringList kColorKeywords = {
+		QStringLiteral("color"), QStringLiteral("colour"),
+		QStringLiteral("fill"),  QStringLiteral("tint"),
+		QStringLiteral("key")
+	};
+	for (const QString &kw : kColorKeywords) {
+		if (label.contains(kw) || hint.contains(kw) || name.contains(kw)) {
+			return QStringLiteral("color");
+		}
+	}
+
+	// Rule 2: explicit scalar/adjustment keywords → scalar
+	static const QStringList kScalarKeywords = {
+		QStringLiteral("gamma"),    QStringLiteral("contrast"),
+		QStringLiteral("gain"),     QStringLiteral("offset"),
+		QStringLiteral("saturation"), QStringLiteral("exposure"),
+		QStringLiteral("brightness"), QStringLiteral("lift"),
+		QStringLiteral("multiply"),   QStringLiteral("scale"),
+		QStringLiteral("pivot")
+	};
+	for (const QString &kw : kScalarKeywords) {
+		if (label.contains(kw) || hint.contains(kw) || name.contains(kw)) {
+			return QStringLiteral("scalar");
+		}
+	}
+
+	// Rule 3: display range significantly outside/asymmetric to [0,1] → scalar
+	const auto &props = param->getProperties();
+	const int dim = (ofxType == kOfxParamTypeRGBA) ? 4 : 3;
+	double dmin[4] = {0, 0, 0, 0};
+	double dmax[4] = {1, 1, 1, 1};
+	props.getDoublePropertyN(kOfxParamPropDisplayMin, dmin, dim);
+	props.getDoublePropertyN(kOfxParamPropDisplayMax, dmax, dim);
+	bool range_looks_scalar = false;
+	for (int i = 0; i < dim; ++i) {
+		if (dmin[i] < -0.01 || dmax[i] > 1.01) {
+			range_looks_scalar = true;
+			break;
+		}
+	}
+	if (range_looks_scalar) {
+		return QStringLiteral("scalar");
+	}
+
+	// Rule 4: default values all equal → scalar (lean)
+	double defs[4] = {0, 0, 0, 1};
+	props.getDoublePropertyN(kOfxParamPropDefault, defs, dim);
+	bool all_equal = true;
+	for (int i = 1; i < dim; ++i) {
+		if (defs[i] != defs[0]) {
+			all_equal = false;
+			break;
+		}
+	}
+	if (all_equal) {
+		return QStringLiteral("scalar");
+	}
+
+	// Rule 5: parent group contains scalar keywords → scalar
+	const QString parent =
+		QString::fromStdString(param->getParentName()).toLower();
+	if (!parent.isEmpty()) {
+		for (const QString &kw : kScalarKeywords) {
+			if (parent.contains(kw)) {
+				return QStringLiteral("scalar");
+			}
+		}
+	}
+
+	// Fallback
+	return QStringLiteral("color");
+}
+
 QHash<QString, QVariant>
 BuildDefaultValues(const std::map<std::string, OFX::Host::Param::Instance *> &params)
 {
@@ -273,6 +366,36 @@ olive::plugin::PluginNode::PluginNode(
 		if (page_for_param.contains(input_id)) {
 			SetInputProperty(input_id, QStringLiteral("ui_page"),
 							 page_for_param.value(input_id));
+		}
+		if (type == NodeValue::kColor) {
+			QString semantic =
+				DeduceColorSemantic(param.second, group_labels);
+			SetInputProperty(input_id,
+							 QStringLiteral("color_semantic"),
+							 semantic);
+
+			const int dim =
+				(ofxType == kOfxParamTypeRGBA) ? 4 : 3;
+			double dmin[4] = {0, 0, 0, 0};
+			double dmax[4] = {1, 1, 1, 1};
+			props.getDoublePropertyN(kOfxParamPropDisplayMin,
+									 dmin, dim);
+			props.getDoublePropertyN(kOfxParamPropDisplayMax,
+									 dmax, dim);
+			SetInputProperty(input_id,
+							 QStringLiteral("min"),
+							 dmin[0]);
+			SetInputProperty(input_id,
+							 QStringLiteral("max"),
+							 dmax[0]);
+
+			const QString hint = QString::fromStdString(
+				param.second->getHint());
+			if (!hint.isEmpty()) {
+				SetInputProperty(input_id,
+								 QStringLiteral("tooltip"),
+								 hint);
+			}
 		}
 		if (type == NodeValue::kCombo || type == NodeValue::kStrCombo) {
 			QStringList option_labels;
