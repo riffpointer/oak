@@ -21,6 +21,7 @@
 #include "render/rendermanager.h"
 #include "render/job/pluginjob.h"
 #include "pluginSupport/OlivePluginInstance.h"
+#include "common/Current.h"
 
 #include <algorithm>
 #include <cstring>
@@ -33,6 +34,24 @@
 
 namespace {
 QHash<QString, QHash<QString, QVariant>> g_plugin_param_defaults;
+
+static bool IsNormalisedCoordSystem(const OFX::Host::Param::Base *param)
+{
+	return param->getDefaultCoordinateSystem() ==
+		   kOfxParamCoordinatesNormalised;
+}
+
+static void GetProjectExtent(double &xSize, double &ySize)
+{
+	auto &vp = Current::getInstance().currentVideoParams();
+	xSize = vp.width() * vp.pixel_aspect_ratio().toDouble();
+	ySize = vp.height();
+}
+
+static double ToCanonical(double normalised, double extent)
+{
+	return extent > 0 ? normalised * extent : normalised;
+}
 
 QVariant DefaultValueForParam(const OFX::Host::Param::Base *param)
 {
@@ -50,7 +69,13 @@ QVariant DefaultValueForParam(const OFX::Host::Param::Base *param)
 		return props.getIntProperty(kOfxParamPropDefault) != 0;
 	}
 	if (ofxType == kOfxParamTypeDouble) {
-		return props.getDoubleProperty(kOfxParamPropDefault);
+		double val = props.getDoubleProperty(kOfxParamPropDefault);
+		if (IsNormalisedCoordSystem(param)) {
+			double xSize, ySize;
+			GetProjectExtent(xSize, ySize);
+			val = ToCanonical(val, xSize);
+		}
+		return val;
 	}
 	if (ofxType == kOfxParamTypeString ||
 		ofxType == kOfxParamTypeStrChoice ||
@@ -81,6 +106,15 @@ QVariant DefaultValueForParam(const OFX::Host::Param::Base *param)
 		if (is_double) {
 			double values[3] = {0.0, 0.0, 0.0};
 			props.getDoublePropertyN(kOfxParamPropDefault, values, count);
+			if (IsNormalisedCoordSystem(param)) {
+				double xSize, ySize;
+				GetProjectExtent(xSize, ySize);
+				values[0] = ToCanonical(values[0], xSize);
+				values[1] = ToCanonical(values[1], ySize);
+				if (count == 3) {
+					values[2] = ToCanonical(values[2], xSize);
+				}
+			}
 			if (count == 2) {
 				return QVector2D(values[0], values[1]);
 			}

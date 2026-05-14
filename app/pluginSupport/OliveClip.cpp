@@ -538,7 +538,8 @@ olive::plugin::OliveClipInstance::getRegionOfDefinition(OfxTime time) const
 	}
 	OfxRectD regionOfDefinition;
 	regionOfDefinition.x1 = regionOfDefinition.y1 = 0;
-	regionOfDefinition.x2 = params_.width();
+	double par = params_.pixel_aspect_ratio().toDouble();
+	regionOfDefinition.x2 = params_.width() * par;
 	regionOfDefinition.y2 = params_.height();
 	return regionOfDefinition;
 }

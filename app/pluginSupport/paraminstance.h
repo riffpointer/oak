@@ -32,12 +32,38 @@
 #include "node/plugins/Plugin.h"
 #include "core.h"
 #include "undo/undocommand.h"
+#include "common/Current.h"
 #include <iostream>
 #include <qlogging.h>
 namespace olive
 {
 namespace plugin
 {
+
+inline bool IsNormalisedCoordinateSystem(
+	const OFX::Host::Param::Descriptor &descriptor)
+{
+	return descriptor.getDefaultCoordinateSystem() ==
+		   kOfxParamCoordinatesNormalised;
+}
+
+inline void GetProjectExtent(double &xSize, double &ySize)
+{
+	auto &vp = Current::getInstance().currentVideoParams();
+	xSize = vp.width() * vp.pixel_aspect_ratio().toDouble();
+	ySize = vp.height();
+}
+
+inline double ToNormalised(double canonical, double extent)
+{
+	return extent > 0 ? canonical / extent : canonical;
+}
+
+inline double ToCanonical(double normalised, double extent)
+{
+	return extent > 0 ? normalised * extent : normalised;
+}
+
 inline QString ParamChangeLabel(const OFX::Host::Param::Descriptor &descriptor)
 {
 	return QStringLiteral("Change %1")
@@ -185,6 +211,11 @@ public:
 		QVariant variant = node->GetStandardValue(_descriptor.getName().c_str());
 		if (variant.canConvert<double>()) {
 			data = variant.toDouble();
+			if (IsNormalisedCoordinateSystem(_descriptor)) {
+				double xSize, ySize;
+				GetProjectExtent(xSize, ySize);
+				data = ToNormalised(data, xSize);
+			}
 			return kOfxStatOK;
 		}
 		data = 0.0;
@@ -201,6 +232,11 @@ public:
 								 rational::fromDouble(time));
 		if (variant.canConvert<double>()) {
 			data = variant.toDouble();
+			if (IsNormalisedCoordinateSystem(_descriptor)) {
+				double xSize, ySize;
+				GetProjectExtent(xSize, ySize);
+				data = ToNormalised(data, xSize);
+			}
 			return kOfxStatOK;
 		}
 		data = 0.0;
@@ -213,8 +249,14 @@ public:
 			has_value_ = true;
 			return kOfxStatOK;
 		}
+		double val = data;
+		if (IsNormalisedCoordinateSystem(_descriptor)) {
+			double xSize, ySize;
+			GetProjectExtent(xSize, ySize);
+			val = ToCanonical(val, xSize);
+		}
 		SplitValue split = NodeValue::split_normal_value_into_track_values(
-			NodeValue::kFloat, data);
+			NodeValue::kFloat, val);
 		auto command = new NodeParamSetSplitStandardValueCommand(
 			NodeInput(node.get(), _descriptor.getName().c_str()), split);
 		SubmitUndoCommand(node, command, ParamChangeLabel(_descriptor));
@@ -227,10 +269,16 @@ public:
 			has_value_ = true;
 			return kOfxStatOK;
 		}
+		double val = data;
+		if (IsNormalisedCoordinateSystem(_descriptor)) {
+			double xSize, ySize;
+			GetProjectExtent(xSize, ySize);
+			val = ToCanonical(val, xSize);
+		}
 		auto command = new MultiUndoCommand();
 		Node::SetValueAtTime(
 			NodeInput(node.get(), _descriptor.getName().c_str()),
-			rational::fromDouble(time), data, 0, command, true);
+			rational::fromDouble(time), val, 0, command, true);
 		SubmitUndoCommand(node, command, ParamChangeLabel(_descriptor));
 		return kOfxStatOK;
 	}
@@ -661,6 +709,12 @@ public:
 				.value<QVector2D>();
 		x = static_cast<double>(vec.x());
 		y = static_cast<double>(vec.y());
+		if (IsNormalisedCoordinateSystem(_descriptor)) {
+			double xSize, ySize;
+			GetProjectExtent(xSize, ySize);
+			x = ToNormalised(x, xSize);
+			y = ToNormalised(y, ySize);
+		}
 		return kOfxStatOK;
 	}
 	OfxStatus get(OfxTime time,double& x,double& y)
@@ -680,6 +734,12 @@ public:
 				.value<QVector2D>();
 		x = static_cast<double>(vec.x());
 		y = static_cast<double>(vec.y());
+		if (IsNormalisedCoordinateSystem(_descriptor)) {
+			double xSize, ySize;
+			GetProjectExtent(xSize, ySize);
+			x = ToNormalised(x, xSize);
+			y = ToNormalised(y, ySize);
+		}
 		return kOfxStatOK;
 	}
 	OfxStatus set(double x,double y)
@@ -690,8 +750,15 @@ public:
 			has_value_ = true;
 			return kOfxStatOK;
 		}
+		double xv = x, yv = y;
+		if (IsNormalisedCoordinateSystem(_descriptor)) {
+			double xSize, ySize;
+			GetProjectExtent(xSize, ySize);
+			xv = ToCanonical(xv, xSize);
+			yv = ToCanonical(yv, ySize);
+		}
 		SplitValue split = NodeValue::split_normal_value_into_track_values(
-			NodeValue::kVec2, QVector2D(x, y));
+			NodeValue::kVec2, QVector2D(xv, yv));
 		auto command = new NodeParamSetSplitStandardValueCommand(
 			NodeInput(node.get(), _descriptor.getName().c_str()), split);
 		SubmitUndoCommand(node, command, ParamChangeLabel(_descriptor));
@@ -705,12 +772,19 @@ public:
 			has_value_ = true;
 			return kOfxStatOK;
 		}
+		double xv = x, yv = y;
+		if (IsNormalisedCoordinateSystem(_descriptor)) {
+			double xSize, ySize;
+			GetProjectExtent(xSize, ySize);
+			xv = ToCanonical(xv, xSize);
+			yv = ToCanonical(yv, ySize);
+		}
 		auto command = new MultiUndoCommand();
 		const QString name = _descriptor.getName().c_str();
 		Node::SetValueAtTime(NodeInput(node.get(), name), rational::fromDouble(time),
-							 x, 0, command, true);
+							 xv, 0, command, true);
 		Node::SetValueAtTime(NodeInput(node.get(), name), rational::fromDouble(time),
-							 y, 1, command, true);
+							 yv, 1, command, true);
 		SubmitUndoCommand(node, command, ParamChangeLabel(_descriptor));
 		return kOfxStatOK;
 	}
@@ -844,6 +918,13 @@ public:
 		x = static_cast<double>(vec.x());
 		y = static_cast<double>(vec.y());
 		z = static_cast<double>(vec.z());
+		if (IsNormalisedCoordinateSystem(_descriptor)) {
+			double xSize, ySize;
+			GetProjectExtent(xSize, ySize);
+			x = ToNormalised(x, xSize);
+			y = ToNormalised(y, ySize);
+			z = ToNormalised(z, xSize);
+		}
 		return kOfxStatOK;
 	}
 	OfxStatus get(OfxTime time,double& x,double& y,double& z)
@@ -865,6 +946,13 @@ public:
 		x = static_cast<double>(vec.x());
 		y = static_cast<double>(vec.y());
 		z = static_cast<double>(vec.z());
+		if (IsNormalisedCoordinateSystem(_descriptor)) {
+			double xSize, ySize;
+			GetProjectExtent(xSize, ySize);
+			x = ToNormalised(x, xSize);
+			y = ToNormalised(y, ySize);
+			z = ToNormalised(z, xSize);
+		}
 		return kOfxStatOK;
 	}
 	OfxStatus set(double x,double y,double z)
@@ -876,8 +964,16 @@ public:
 			has_value_ = true;
 			return kOfxStatOK;
 		}
+		double xv = x, yv = y, zv = z;
+		if (IsNormalisedCoordinateSystem(_descriptor)) {
+			double xSize, ySize;
+			GetProjectExtent(xSize, ySize);
+			xv = ToCanonical(xv, xSize);
+			yv = ToCanonical(yv, ySize);
+			zv = ToCanonical(zv, xSize);
+		}
 		SplitValue split = NodeValue::split_normal_value_into_track_values(
-			NodeValue::kVec3, QVector3D(x, y, z));
+			NodeValue::kVec3, QVector3D(xv, yv, zv));
 		auto command = new NodeParamSetSplitStandardValueCommand(
 			NodeInput(node.get(), _descriptor.getName().c_str()), split);
 		SubmitUndoCommand(node, command, ParamChangeLabel(_descriptor));
@@ -892,14 +988,22 @@ public:
 			has_value_ = true;
 			return kOfxStatOK;
 		}
+		double xv = x, yv = y, zv = z;
+		if (IsNormalisedCoordinateSystem(_descriptor)) {
+			double xSize, ySize;
+			GetProjectExtent(xSize, ySize);
+			xv = ToCanonical(xv, xSize);
+			yv = ToCanonical(yv, ySize);
+			zv = ToCanonical(zv, xSize);
+		}
 		auto command = new MultiUndoCommand();
 		const QString name = _descriptor.getName().c_str();
 		Node::SetValueAtTime(NodeInput(node.get(), name),
-							 rational::fromDouble(time), x, 0, command, true);
+							 rational::fromDouble(time), xv, 0, command, true);
 		Node::SetValueAtTime(NodeInput(node.get(), name),
-							 rational::fromDouble(time), y, 1, command, true);
+							 rational::fromDouble(time), yv, 1, command, true);
 		Node::SetValueAtTime(NodeInput(node.get(), name),
-							 rational::fromDouble(time), z, 2, command, true);
+							 rational::fromDouble(time), zv, 2, command, true);
 		SubmitUndoCommand(node, command, ParamChangeLabel(_descriptor));
 		return kOfxStatOK;
 	}

@@ -276,18 +276,21 @@ OfxStatus OlivePluginInstance::clearPersistentMessage()
 }
 void OlivePluginInstance::getProjectSize(double &xSize, double &ySize) const
 {
-	xSize =params_.width();
-	ySize =params_.height();
+	double par = params_.pixel_aspect_ratio().toDouble();
+	xSize = params_.width() * par;
+	ySize = params_.height();
 }
 void OlivePluginInstance::getProjectOffset(double &xOffset, double &yOffset) const
 {
-	xOffset =params_.x();
-	yOffset =params_.y();
+	double par = params_.pixel_aspect_ratio().toDouble();
+	xOffset = params_.x() * par;
+	yOffset = params_.y();
 }
 void OlivePluginInstance::getProjectExtent(double &xSize, double &ySize) const
 {
-	xSize =params_.width();
-	ySize =params_.height();
+	double par = params_.pixel_aspect_ratio().toDouble();
+	xSize = params_.width() * par;
+	ySize = params_.height();
 }
 double OlivePluginInstance::getProjectPixelAspectRatio() const
 {

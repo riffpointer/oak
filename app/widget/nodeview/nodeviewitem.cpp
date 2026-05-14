@@ -31,6 +31,7 @@
 #include "config/config.h"
 #include "core.h"
 #include "node/nodeundo.h"
+#include "node/value.h"
 #include "pluginSupport/OlivePluginInstance.h"
 #include "nodeview.h"
 #include "nodeviewscene.h"
@@ -753,7 +754,17 @@ void NodeViewItem::UpdateOutputConnectorPosition()
 
 bool NodeViewItem::IsInputValid(const QString &input)
 {
-	return node_->IsInputConnectable(input) && !node_->IsInputHidden(input);
+	if (!node_->IsInputConnectable(input) || node_->IsInputHidden(input)) {
+		return false;
+	}
+	// For OFX plugin nodes, only show texture inputs in the node graph
+	// to avoid excessively tall nodes with dozens of scalar parameters.
+	// Scalar parameters are still visible in the parameter panel.
+	if (node_->getPluginInstance() != nullptr &&
+		node_->GetInputDataType(input) != NodeValue::kTexture) {
+		return false;
+	}
+	return true;
 }
 
 void NodeViewItem::SetRectSize(int height_units)
