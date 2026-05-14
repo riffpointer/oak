@@ -239,8 +239,10 @@ void ViewerWidget::ConnectNodeEvent(ViewerOutput *n)
 			&ViewerWidget::UpdateTextureFromNode, Qt::QueuedConnection);
 	connect(n, &ViewerOutput::AudioParamsChanged, this,
 			&ViewerWidget::UpdateRendererAudioParameters);
-	connect(n->video_frame_cache(), &FrameHashCache::Invalidated, this,
-			&ViewerWidget::ViewerInvalidatedVideoRange);
+	if (FrameHashCache *cache = n->video_frame_cache()) {
+		connect(cache, &FrameHashCache::Invalidated, this,
+				&ViewerWidget::ViewerInvalidatedVideoRange);
+	}
 	connect(n, &ViewerOutput::TextureInputChanged, this,
 			&ViewerWidget::UpdateWaveformViewFromMode);
 
@@ -295,8 +297,10 @@ void ViewerWidget::DisconnectNodeEvent(ViewerOutput *n)
 			   &ViewerWidget::UpdateTextureFromNode);
 	disconnect(n, &ViewerOutput::AudioParamsChanged, this,
 			   &ViewerWidget::UpdateRendererAudioParameters);
-	disconnect(n->video_frame_cache(), &FrameHashCache::Invalidated, this,
-			   &ViewerWidget::ViewerInvalidatedVideoRange);
+	if (FrameHashCache *cache = n->video_frame_cache()) {
+		disconnect(cache, &FrameHashCache::Invalidated, this,
+				   &ViewerWidget::ViewerInvalidatedVideoRange);
+	}
 	disconnect(n, &ViewerOutput::TextureInputChanged, this,
 			   &ViewerWidget::UpdateWaveformViewFromMode);
 

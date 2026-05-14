@@ -1043,6 +1043,13 @@ static olive::AVFramePtr ConvertFrameIfNeeded(olive::AVFramePtr src,
 		int src_ch;
 		GetOliveFormatFromAV(static_cast<AVPixelFormat>(src->format), &src_fmt, &src_ch);
 		if (src_fmt != olive::core::PixelFormat::INVALID && src_ch > 0) {
+			// Ensure renderer's OpenGL context is current before GPU operations.
+			// The context may have been switched by upstream DownloadFromTexture calls.
+			auto *gl_renderer = dynamic_cast<olive::OpenGLRenderer *>(renderer);
+			if (gl_renderer) {
+				gl_renderer->EnsureContextCurrent(__FUNCTION__);
+			}
+
 			olive::VideoParams src_vp(src->width, src->height, src_fmt, src_ch);
 			int src_bpp = olive::VideoParams::GetBytesPerPixel(src_fmt, src_ch);
 			int src_linesize_pixels = (src_bpp > 0) ? src->linesize[0] / src_bpp : src->width;

@@ -40,9 +40,10 @@ public:
 	OliveClipInstance(OFX::Host::ImageEffect::Instance* effectInstance,
 		OFX::Host::ImageEffect::ClipDescriptor& desc,VideoParams &params)
 		: ClipInstance(effectInstance, desc)
+		, params_(params)
+		, defaultRegionOfDefinitions_{0, 0, 0, 0}
 		, name_(desc.getName())
 	{
-		params_ = params;
 	}
     OFX::Host::ImageEffect::Image* getOutputImage(OfxTime time);
 
