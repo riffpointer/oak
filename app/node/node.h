@@ -101,6 +101,7 @@ public:
 		kCategoryTransition,
 		kCategoryDistort,
 		kCategoryProject,
+		kCategoryOpenFX,
 
 		kCategoryCount
 	};
@@ -176,6 +177,12 @@ public:
    * oriented.
    */
 	virtual QVector<CategoryID> Category() const = 0;
+
+	/**
+	 * @brief Return a sub-category string for secondary grouping
+	 *        within the primary category (e.g. "Filter" under "OpenFX").
+	 */
+	virtual QString SubCategory() const { return QString(); }
 
 	/**
    * @brief Return a description of this node's purpose (optional for subclassing, but recommended)

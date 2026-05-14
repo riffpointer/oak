@@ -250,6 +250,18 @@ olive::plugin::PluginNode::PluginNode(
 	OFX::Host::ImageEffect::Instance *plugin)
 {
 	plugin_instance_=plugin;
+
+	const std::string &ctx = plugin_instance_->getContext();
+	if (ctx == kOfxImageEffectContextFilter) {
+		sub_category_ = tr("Filter");
+	} else if (ctx == kOfxImageEffectContextGenerator) {
+		sub_category_ = tr("Generator");
+	} else if (ctx == kOfxImageEffectContextTransition) {
+		sub_category_ = tr("Transition");
+	} else {
+		sub_category_ = tr("General");
+	}
+
 	bool has_texture_input = false;
 	QHash<QString, QString> group_labels;
 	QHash<QString, QString> page_labels;
@@ -505,7 +517,12 @@ QString olive::plugin::PluginNode::Name() const
 
 QVector<olive::Node::CategoryID> olive::plugin::PluginNode::Category() const
 {
-	return { olive::Node::kCategoryUnknown };
+	return { olive::Node::kCategoryOpenFX };
+}
+
+QString olive::plugin::PluginNode::SubCategory() const
+{
+	return sub_category_;
 }
 
 QString olive::plugin::PluginNode::Description() const

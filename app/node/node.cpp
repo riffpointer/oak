@@ -2295,6 +2295,8 @@ QString Node::GetCategoryName(const CategoryID &c)
 		return tr("Transition");
 	case kCategoryProject:
 		return tr("Project");
+	case kCategoryOpenFX:
+		return tr("OpenFX");
 	case kCategoryTime:
 		return tr("Time");
 	case kCategoryUnknown:

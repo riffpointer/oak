@@ -128,25 +128,40 @@ Menu *NodeFactory::CreateMenu(QWidget *parent, bool create_none_item,
 		// Make sure nodes are up-to-date with the current translation
 		n->Retranslate();
 
-		Menu *destination = nullptr;
-
 		QString category_name = Node::GetCategoryName(
 			n->Category().isEmpty() ? Node::kCategoryUnknown :
 									  n->Category().first());
 
-		// See if a menu with this category name already exists
+		// Find or create top-level category menu
+		Menu *top_menu = nullptr;
 		QList<QAction *> menu_actions = menu->actions();
 		foreach (QAction *action, menu_actions) {
 			if (action->menu() && action->menu()->title() == category_name) {
-				destination = static_cast<Menu *>(action->menu());
+				top_menu = static_cast<Menu *>(action->menu());
 				break;
 			}
 		}
+		if (!top_menu) {
+			top_menu = new Menu(category_name, menu);
+			menu->InsertAlphabetically(top_menu);
+		}
 
-		// Create menu here if it doesn't exist
-		if (!destination) {
-			destination = new Menu(category_name, menu);
-			menu->InsertAlphabetically(destination);
+		// Determine final destination (support secondary grouping)
+		Menu *destination = top_menu;
+		QString sub = n->SubCategory();
+		if (!sub.isEmpty() &&
+			n->Category().contains(Node::kCategoryOpenFX)) {
+			QList<QAction *> sub_actions = top_menu->actions();
+			foreach (QAction *action, sub_actions) {
+				if (action->menu() && action->menu()->title() == sub) {
+					destination = static_cast<Menu *>(action->menu());
+					break;
+				}
+			}
+			if (destination == top_menu) {
+				destination = new Menu(sub, top_menu);
+				top_menu->InsertAlphabetically(destination);
+			}
 		}
 
 		// Add entry to menu

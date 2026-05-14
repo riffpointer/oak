@@ -38,6 +38,7 @@ public:
 	QString Name() const override;
 	QString id() const override;
 	QVector<CategoryID> Category() const override;
+	QString SubCategory() const override;
 	QString Description() const override;
 
 	void AddPushButton();
@@ -75,6 +76,9 @@ public:
    * The destination buffer. It will already be allocated and ready for writing to.
    */
 	virtual void GenerateFrame(FramePtr frame, const GenerateJob &job) const;
+
+private:
+	QString sub_category_;
 
 public slots:
 	void pushButtonClicked(QString name);
