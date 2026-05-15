@@ -67,7 +67,8 @@ public:
 		: Instance(instance._plugin, *instance._descriptor, instance._context,
 				   instance._interactive)
 	{
-		_clips=instance._clips;
+		// Do NOT shallow-copy _clips: Instance::~Instance() deletes them,
+		// which would cause a double-free. Clips are re-created in populate().
 		_created=instance._created;
 		_clipPrefsDirty=instance._clipPrefsDirty;
 		_continuousSamples=instance._continuousSamples;
@@ -75,7 +76,6 @@ public:
 		_outputPreMultiplication=instance._outputPreMultiplication;
 		_outputFielding=instance._outputFielding;
 		_outputFrameRate=instance._outputFrameRate;
-
 	}
 	explicit OlivePluginInstance(Instance & instance):Instance(instance){};
 	~OlivePluginInstance() override;

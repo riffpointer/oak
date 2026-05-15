@@ -36,11 +36,14 @@
 #include <string>
 #include <vector>
 #include <QDebug>
+#include <QMessageBox>
 #include <QVector2D>
 #include <QVector3D>
 #include <QVector4D>
 #define GL_PREAMBLE //QMutexLocker __l(&global_opengl_mutex);
 #include "pluginrenderer.h"
+#include "core.h"
+#include "undo/undostack.h"
 #include "pluginSupport/OliveClip.h"
 #include "pluginSupport/OlivePluginInstance.h"
 #include "common/ffmpegutils.h"
@@ -1229,8 +1232,8 @@ static void LogImageProps(const char *label,
 						  OFX::Host::ImageEffect::Image *image)
 {
 	if (!image) {
-		qWarning().noquote() << "OFX image props" << label << "<null>";
-		return;
+		/*qWarning().noquote() << "OFX image props" << label << "<null>";
+		return;*/
 	}
 	int bounds[4] = {0, 0, 0, 0};
 	int rod[4] = {0, 0, 0, 0};
@@ -1241,13 +1244,13 @@ static void LogImageProps(const char *label,
 		image->getStringProperty(kOfxImageEffectPropPixelDepth);
 	const std::string &components =
 		image->getStringProperty(kOfxImageEffectPropComponents);
-	qWarning().noquote()
+	/*qWarning().noquote()
 		<< "OFX image props" << label
 		<< "pixelDepth=" << QString::fromStdString(depth)
 		<< "components=" << QString::fromStdString(components)
 		<< "rowBytes=" << row_bytes
 		<< "bounds=" << bounds[0] << bounds[1] << bounds[2] << bounds[3]
-		<< "rod=" << rod[0] << rod[1] << rod[2] << rod[3];
+		<< "rod=" << rod[0] << rod[1] << rod[2] << rod[3];*/
 }
 
 // 作用：渲染失败时标记目标画面（紫色）提示错误。
@@ -1258,6 +1261,30 @@ static void MarkRenderFailure(olive::TexturePtr destination)
 		destination->renderer()->ClearDestination(destination.get(), 1.0, 0.0, 1.0, 1.0);
 	}
 }
+
+/// Show an error dialog and undo the last operation. Must be called from the GUI thread.
+static void ShowErrorDialogAndUndo(const QString &message)
+{
+	if (auto *core = olive::Core::instance()) {
+		if (auto *stack = core->undo_stack()) {
+			if (stack->CanUndo()) {
+				stack->undo();
+			}
+		}
+	}
+	QMessageBox::critical(nullptr, QObject::tr("Plugin Error"), message);
+}
+
+/// Schedule an error dialog + undo on the GUI thread from a render thread.
+static void ScheduleErrorDialogAndUndo(const QString &message)
+{
+	if (auto *app = QCoreApplication::instance()) {
+		QMetaObject::invokeMethod(app, [message]() {
+			ShowErrorDialogAndUndo(message);
+		}, Qt::QueuedConnection);
+	}
+}
+
 static olive::AVFramePtr DownloadTextureToFrame(const olive::TexturePtr &tex)
 {
 	if (!tex || tex->IsDummy() || !tex->renderer()) {
@@ -1357,6 +1384,16 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 		destination->id().isValid();
 	if (olive_instance) {
 		olive_instance->setVideoParam(destination_params);
+		// Ensure all clip instances inherit the project's params so that
+		// getAspectRatio/getFrameRate etc. return valid values before
+		// createInstanceAction (which may call fetchClip and query them).
+		for (int i = 0; i < olive_instance->getNClips(); ++i) {
+			OliveClipInstance *clip = dynamic_cast<OliveClipInstance *>(
+				olive_instance->getNthClip(i));
+			if (clip) {
+				clip->setParams(destination_params);
+			}
+		}
 	}
 
 	// current render scale of 1
@@ -1439,21 +1476,44 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 		}
 	}
 
-	// call getClipPreferences to know which format plugin requires
-	OFX::Host::Property::Set args;
-	args.setDoubleProperty(kOfxPropTime, frame);
-	double render_scale_array[] = {
-		renderScale.x, renderScale.y
-	};
-	args.setDoublePropertyN(kOfxImageEffectPropRenderScale, render_scale_array, 2);
-	instance->setupClipPreferencesArgs(args);
-	// now we need to call getClipPreferences on the instance so that it does
-	// the clip component/depth logic and caches away the components and depth.
-	bool ok = instance->getClipPreferences();
+	// call getClipPreferences to know which format plugin requires.
+	// getClipPreferences internally calls setupClipPreferencesArgs, which
+	// validates that all connected input clips have the same frame rate.
+	// Wrap in try/catch because setupClipPreferencesArgs throws on validation
+	// failure and would otherwise crash the render thread.
+	bool ok = false;
+	try {
+		ok = instance->getClipPreferences();
+	} catch (const OFX::Host::Property::Exception &e) {
+		qWarning().noquote() << "OFX getClipPreferences threw exception for plugin="
+							 << PluginIdForInstance(instance)
+							 << "stat=" << e.getStatus();
+		MarkRenderFailure(destination);
+		ScheduleErrorDialogAndUndo(
+			QObject::tr("Plugin %1 failed because connected inputs have different frame rates.\n"
+						"The last operation has been undone.")
+				.arg(PluginIdForInstance(instance)));
+		return;
+	} catch (const std::exception &e) {
+		qWarning().noquote() << "OFX getClipPreferences threw exception for plugin="
+							 << PluginIdForInstance(instance)
+							 << "what=" << e.what();
+		MarkRenderFailure(destination);
+		ScheduleErrorDialogAndUndo(
+			QObject::tr("Plugin %1 encountered an error: %2\n"
+						"The last operation has been undone.")
+				.arg(PluginIdForInstance(instance),
+					 QString::fromUtf8(e.what())));
+		return;
+	}
 	if (!ok) {
 		qWarning().noquote() << "OFX getClipPreferences failed for plugin="
 							 << PluginIdForInstance(instance);
 		MarkRenderFailure(destination);
+		ScheduleErrorDialogAndUndo(
+			QObject::tr("Plugin %1 failed to get clip preferences.\n"
+						"The last operation has been undone.")
+				.arg(PluginIdForInstance(instance)));
 		return;
 	}
 	/// RoI is in canonical coords.
@@ -1526,9 +1586,19 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 	stat = instance->getRegionOfInterestAction(frame, renderScale,
 											   regionOfInterest, rois);
 	if (stat != kOfxStatOK && stat != kOfxStatReplyDefault) {
-		LogOfxFailure("getRegionOfInterest", stat, instance);
-		MarkRenderFailure(destination);
-		return;
+		// Some plugins (e.g. CImg filters) return BadHandle from getRegionOfInterest
+		// when internal clip/property handles are not fully initialized.
+		// Treat this as a non-fatal error and fall back to default RoI.
+		if (stat == kOfxStatErrBadHandle) {
+			qWarning().noquote()
+				<< "OFX getRegionOfInterest returned BadHandle for plugin="
+				<< PluginIdForInstance(instance)
+				<< "- using default RoI";
+		} else {
+			LogOfxFailure("getRegionOfInterest", stat, instance);
+			MarkRenderFailure(destination);
+			return;
+		}
 	}
 	// set correct format for output
 	// Query plugin-supported depths and pick best according to our priority:

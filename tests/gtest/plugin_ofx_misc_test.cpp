@@ -85,7 +85,10 @@ TexturePtr CreateSolidTexture(const VideoParams &params, uint32_t fill_value = 0
 }
 
 // Helper to create a gradient texture
-TexturePtr CreateGradientTexture(const VideoParams &params)
+// For U8: gradient is 0-255 per byte
+// For Float: gradient is 0.0-1.0 per component
+template<typename T>
+TexturePtr CreateGradientTextureT(const VideoParams &params, float scale)
 {
 	AVFramePtr frame = CreateAVFramePtr();
 	frame->format = FFmpegUtils::GetFFmpegPixelFormat(
@@ -104,9 +107,9 @@ TexturePtr CreateGradientTexture(const VideoParams &params)
 
 	const int linesize = frame->linesize[0];
 	for (int y = 0; y < frame->height; ++y) {
-		uint8_t *row = frame->data[0] + y * linesize;
-		uint8_t value = static_cast<uint8_t>((y * 255) / frame->height);
-		for (int x = 0; x < linesize; ++x) {
+		T *row = reinterpret_cast<T*>(frame->data[0] + y * linesize);
+		T value = static_cast<T>((y * scale) / frame->height);
+		for (int x = 0; x < frame->width * params.channel_count(); ++x) {
 			row[x] = value;
 		}
 	}
@@ -114,6 +117,21 @@ TexturePtr CreateGradientTexture(const VideoParams &params)
 	TexturePtr texture = std::make_shared<Texture>(params);
 	texture->handleFrame(frame);
 	return texture;
+}
+
+TexturePtr CreateGradientTexture(const VideoParams &params)
+{
+	switch (params.format()) {
+	case core::PixelFormat::U8:
+		return CreateGradientTextureT<uint8_t>(params, 255.0f);
+	case core::PixelFormat::U16:
+		return CreateGradientTextureT<uint16_t>(params, 65535.0f);
+	case core::PixelFormat::F16:
+	case core::PixelFormat::F32:
+		return CreateGradientTextureT<float>(params, 1.0f);
+	default:
+		return nullptr;
+	}
 }
 
 // Helper function to find and render a plugin
@@ -217,7 +235,7 @@ TEST(PluginMisc, MirrorHorizontal)
 	}
 	
 	// Mirror plugin typically works with 8-bit
-	VideoParams params(320, 240, core::PixelFormat::U8, 4);
+	VideoParams params(320, 240, core::PixelFormat::F32, 4);
 	TexturePtr input = CreateGradientTexture(params);
 	ASSERT_NE(input, nullptr);
 	
@@ -239,7 +257,7 @@ TEST(PluginMisc, TransformTranslate)
 		GTEST_SKIP() << "OFX integration test not enabled";
 	}
 	
-	VideoParams params(320, 240, core::PixelFormat::U8, 4);
+	VideoParams params(320, 240, core::PixelFormat::F32, 4);
 	TexturePtr input = CreateSolidTexture(params, 0x80);
 	ASSERT_NE(input, nullptr);
 	
@@ -261,7 +279,7 @@ TEST(PluginMisc, ColorCorrect)
 		GTEST_SKIP() << "OFX integration test not enabled";
 	}
 	
-	VideoParams params(320, 240, core::PixelFormat::U16, 4);
+	VideoParams params(320, 240, core::PixelFormat::F32, 4);
 	TexturePtr input = CreateSolidTexture(params, 0x80);
 	ASSERT_NE(input, nullptr);
 	
@@ -279,7 +297,7 @@ TEST(PluginMisc, Saturation)
 		GTEST_SKIP() << "OFX integration test not enabled";
 	}
 	
-	VideoParams params(320, 240, core::PixelFormat::U8, 4);
+	VideoParams params(320, 240, core::PixelFormat::F32, 4);
 	TexturePtr input = CreateSolidTexture(params, 0x80);
 	ASSERT_NE(input, nullptr);
 	
@@ -301,7 +319,7 @@ TEST(PluginMisc, GaussianBlur)
 		GTEST_SKIP() << "OFX integration test not enabled";
 	}
 	
-	VideoParams params(320, 240, core::PixelFormat::U8, 4);
+	VideoParams params(320, 240, core::PixelFormat::F32, 4);
 	TexturePtr input = CreateSolidTexture(params, 0x80);
 	ASSERT_NE(input, nullptr);
 	
@@ -324,7 +342,7 @@ TEST(PluginMisc, Crop)
 		GTEST_SKIP() << "OFX integration test not enabled";
 	}
 	
-	VideoParams params(320, 240, core::PixelFormat::U8, 4);
+	VideoParams params(320, 240, core::PixelFormat::F32, 4);
 	TexturePtr input = CreateSolidTexture(params, 0x80);
 	ASSERT_NE(input, nullptr);
 	
@@ -342,7 +360,7 @@ TEST(PluginMisc, Grade)
 		GTEST_SKIP() << "OFX integration test not enabled";
 	}
 	
-	VideoParams params(320, 240, core::PixelFormat::U16, 4);
+	VideoParams params(320, 240, core::PixelFormat::F32, 4);
 	TexturePtr input = CreateSolidTexture(params, 0x80);
 	ASSERT_NE(input, nullptr);
 	
@@ -364,7 +382,7 @@ TEST(PluginMisc, NonExistentPlugin)
 		GTEST_SKIP() << "OFX integration test not enabled";
 	}
 	
-	VideoParams params(320, 240, core::PixelFormat::U8, 4);
+	VideoParams params(320, 240, core::PixelFormat::F32, 4);
 	TexturePtr input = CreateSolidTexture(params, 0x80);
 	ASSERT_NE(input, nullptr);
 	
@@ -386,7 +404,7 @@ TEST(PluginMisc, CImgSharpen)
 		GTEST_SKIP() << "OFX integration test not enabled";
 	}
 	
-	VideoParams params(320, 240, core::PixelFormat::U8, 4);
+	VideoParams params(320, 240, core::PixelFormat::F32, 4);
 	TexturePtr input = CreateSolidTexture(params, 0x80);
 	ASSERT_NE(input, nullptr);
 	
@@ -404,7 +422,7 @@ TEST(PluginMisc, CImgDenoise)
 		GTEST_SKIP() << "OFX integration test not enabled";
 	}
 	
-	VideoParams params(320, 240, core::PixelFormat::U8, 4);
+	VideoParams params(320, 240, core::PixelFormat::F32, 4);
 	TexturePtr input = CreateSolidTexture(params, 0x80);
 	ASSERT_NE(input, nullptr);
 	
@@ -414,6 +432,24 @@ TEST(PluginMisc, CImgDenoise)
 	
 	bool result = RenderPlugin("net.sf.cimg.CImgDenoise", params, row, true);
 	EXPECT_TRUE(result) << "CImgDenoise plugin should produce output";
+}
+
+TEST(PluginMisc, CImgBilateral)
+{
+	if (ShouldSkipTest()) {
+		GTEST_SKIP() << "OFX integration test not enabled";
+	}
+	
+	VideoParams params(320, 240, core::PixelFormat::F32, 4);
+	TexturePtr input = CreateSolidTexture(params, 0x80);
+	ASSERT_NE(input, nullptr);
+	
+	NodeValueRow row;
+	row.insert(QString::fromStdString(kOfxImageEffectSimpleSourceClipName),
+			   NodeValue(NodeValue::kTexture, input));
+	
+	bool result = RenderPlugin("net.sf.cimg.CImgBilateral", params, row, true);
+	EXPECT_TRUE(result) << "CImgBilateral plugin should produce output";
 }
 
 // ============================================================================
@@ -426,7 +462,7 @@ TEST(PluginMisc, MergeOver)
 		GTEST_SKIP() << "OFX integration test not enabled";
 	}
 	
-	VideoParams params(320, 240, core::PixelFormat::U8, 4);
+	VideoParams params(320, 240, core::PixelFormat::F32, 4);
 	TexturePtr input = CreateSolidTexture(params, 0x80);
 	ASSERT_NE(input, nullptr);
 	
@@ -450,7 +486,7 @@ TEST(PluginMisc, Keyer)
 		GTEST_SKIP() << "OFX integration test not enabled";
 	}
 	
-	VideoParams params(320, 240, core::PixelFormat::U16, 4);
+	VideoParams params(320, 240, core::PixelFormat::F32, 4);
 	TexturePtr input = CreateSolidTexture(params, 0x80);
 	ASSERT_NE(input, nullptr);
 	
@@ -472,7 +508,7 @@ TEST(PluginMisc, CornerPin)
 		GTEST_SKIP() << "OFX integration test not enabled";
 	}
 	
-	VideoParams params(320, 240, core::PixelFormat::U8, 4);
+	VideoParams params(320, 240, core::PixelFormat::F32, 4);
 	TexturePtr input = CreateSolidTexture(params, 0x80);
 	ASSERT_NE(input, nullptr);
 	
@@ -490,7 +526,7 @@ TEST(PluginMisc, LensDistortion)
 		GTEST_SKIP() << "OFX integration test not enabled";
 	}
 	
-	VideoParams params(320, 240, core::PixelFormat::U8, 4);
+	VideoParams params(320, 240, core::PixelFormat::F32, 4);
 	TexturePtr input = CreateSolidTexture(params, 0x80);
 	ASSERT_NE(input, nullptr);
 	
@@ -512,7 +548,7 @@ TEST(PluginMisc, Invert)
 		GTEST_SKIP() << "OFX integration test not enabled";
 	}
 	
-	VideoParams params(320, 240, core::PixelFormat::U8, 4);
+	VideoParams params(320, 240, core::PixelFormat::F32, 4);
 	TexturePtr input = CreateSolidTexture(params, 0x80);
 	ASSERT_NE(input, nullptr);
 	
@@ -530,7 +566,7 @@ TEST(PluginMisc, Gamma)
 		GTEST_SKIP() << "OFX integration test not enabled";
 	}
 	
-	VideoParams params(320, 240, core::PixelFormat::U8, 4);
+	VideoParams params(320, 240, core::PixelFormat::F32, 4);
 	TexturePtr input = CreateSolidTexture(params, 0x80);
 	ASSERT_NE(input, nullptr);
 	
@@ -566,6 +602,27 @@ TEST(PluginMisc, ListAvailablePlugins)
 	std::cout << std::endl;
 	
 	SUCCEED();
+}
+
+TEST(PluginMisc, CImgGuided_MultiInput)
+{
+	if (ShouldSkipTest()) GTEST_SKIP() << "OFX integration test not enabled";
+	// CImgGuided is a multi-input plugin (Source + Mask).
+	// This test verifies that connecting both inputs does not trigger
+	// the frame-rate mismatch exception in setupClipPreferencesArgs.
+	VideoParams params(320, 240, core::PixelFormat::F32, 4);
+	TexturePtr source = CreateSolidTexture(params, 0x80);
+	TexturePtr mask = CreateSolidTexture(params, 0x40);
+	ASSERT_NE(source, nullptr);
+	ASSERT_NE(mask, nullptr);
+
+	NodeValueRow row;
+	row.insert(QString::fromStdString(kOfxImageEffectSimpleSourceClipName),
+			   NodeValue(NodeValue::kTexture, source));
+	row.insert(QStringLiteral("Mask"),
+			   NodeValue(NodeValue::kTexture, mask));
+	bool result = RenderPlugin("net.sf.cimg.CImgGuided", params, row, true);
+	EXPECT_TRUE(result) << "CImgGuided plugin should produce output with both Source and Mask connected";
 }
 
 } // namespace test

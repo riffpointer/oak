@@ -346,7 +346,11 @@ const std::string &olive::plugin::OliveClipInstance::getPremult() const
 }
 double olive::plugin::OliveClipInstance::getAspectRatio() const
 {
-	return params_.pixel_aspect_ratio().toDouble();
+	double par = params_.pixel_aspect_ratio().toDouble();
+	if (par == 0.0) {
+		return 1.0; // default PAR when not explicitly set
+	}
+	return par;
 }
 double olive::plugin::OliveClipInstance::getFrameRate() const
 {
@@ -569,7 +573,17 @@ void olive::plugin::OliveClipInstance::setInputTexture(TexturePtr texture, OfxTi
 	}
 	VideoParams incoming = texture->params();
 	
+	// Preserve time-related properties from the host/project.
+	// The frame rate of an OFX clip should reflect the project's frame rate,
+	// not the individual input texture's frame rate. If different inputs
+	// have different frame rates, setupClipPreferencesArgs throws an exception.
+	rational saved_frame_rate = params_.frame_rate();
+	rational saved_time_base = params_.time_base();
+	
 	this->params_ = incoming;
+	
+	params_.set_frame_rate(saved_frame_rate);
+	params_.set_time_base(saved_time_base);
 	// Note: We do NOT call setPixelDepth/setComponents here because
 	// those should be set by getClipPreferences to reflect the PLUGIN's
 	// preferred format, not the input texture's format.

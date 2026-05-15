@@ -29,6 +29,7 @@
 
 #include <string.h>
 #include <stdarg.h>
+#include <iostream>
 
 namespace OFX {
 
@@ -2004,31 +2005,47 @@ namespace OFX {
                                     const OfxRectD *h2,
                                     OfxPropertySetHandle *h3)
       {
+        ClipInstance *clipInstance = nullptr;
         try {
         if (!h3) {
+          std::cerr << "[clipGetImage] h3 is null" << std::endl;
           return kOfxStatErrBadHandle;
         }
 
-        ClipInstance *clipInstance = reinterpret_cast<ClipInstance*>(h1);
+        clipInstance = reinterpret_cast<ClipInstance*>(h1);
 
-        if (!clipInstance || !clipInstance->verifyMagic()) {
+        if (!clipInstance) {
+          std::cerr << "[clipGetImage] clipInstance is null" << std::endl;
+          *h3 = NULL;
+          return kOfxStatErrBadHandle;
+        }
+        if (!clipInstance->verifyMagic()) {
+          std::cerr << "[clipGetImage] verifyMagic failed for clip=" << clipInstance->getName() << std::endl;
           *h3 = NULL;
           return kOfxStatErrBadHandle;
         }
 
         Image* image = clipInstance->getImage(time,h2);
         if(!image) {
+          std::cerr << "[clipGetImage] getImage returned null for clip=" << clipInstance->getName() << " time=" << time << std::endl;
           *h3 = NULL;
-
           return kOfxStatFailed;
         }
 
         *h3 = image->getPropHandle();
+        if (!*h3) {
+          std::cerr << "[clipGetImage] getPropHandle returned null for clip=" << clipInstance->getName() << std::endl;
+          return kOfxStatErrBadHandle;
+        }
 
         return kOfxStatOK;
-        } catch (...) {
+        } catch (const std::exception &e) {
+          std::cerr << "[clipGetImage] exception: " << e.what() << " clip=" << (clipInstance ? clipInstance->getName() : "null") << std::endl;
           *h3 = NULL;
-
+          return kOfxStatErrBadHandle;
+        } catch (...) {
+          std::cerr << "[clipGetImage] unknown exception clip=" << (clipInstance ? clipInstance->getName() : "null") << std::endl;
+          *h3 = NULL;
           return kOfxStatErrBadHandle;
         }
       }
@@ -2095,28 +2112,40 @@ namespace OFX {
                                                  OfxTime time,
                                                  OfxRectD *bounds)
       {
+        ClipInstance *clipInstance = nullptr;
         try {
         if (!bounds) {
+          std::cerr << "[clipGetRegionOfDefinition] bounds is null" << std::endl;
           return kOfxStatErrBadHandle;
         }
 
-        ClipInstance *clipInstance = reinterpret_cast<ClipInstance*>(clip);
+        clipInstance = reinterpret_cast<ClipInstance*>(clip);
 
-        if (!clipInstance || !clipInstance->verifyMagic()) {
+        if (!clipInstance) {
+          std::cerr << "[clipGetRegionOfDefinition] clipInstance is null" << std::endl;
           bounds->x1 = bounds->y1 = bounds->x2 = bounds->y2 = 0.;
-
+          return kOfxStatErrBadHandle;
+        }
+        if (!clipInstance->verifyMagic()) {
+          std::cerr << "[clipGetRegionOfDefinition] verifyMagic failed for clip=" << clipInstance->getName() << std::endl;
+          bounds->x1 = bounds->y1 = bounds->x2 = bounds->y2 = 0.;
           return kOfxStatErrBadHandle;
         }
 
         *bounds = clipInstance->getRegionOfDefinition(time);
         if (bounds->x2 < bounds->x1 || bounds->y2 < bounds->y1) {
-          // the RoD is invalid (empty is OK)
-
+          std::cerr << "[clipGetRegionOfDefinition] invalid RoD for clip=" << clipInstance->getName() << std::endl;
           return kOfxStatFailed;
         }
 
         return kOfxStatOK;
+        } catch (const std::exception &e) {
+          std::cerr << "[clipGetRegionOfDefinition] exception: " << e.what() << " clip=" << (clipInstance ? clipInstance->getName() : "null") << std::endl;
+          bounds->x1 = bounds->y1 = bounds->x2 = bounds->y2 = 0.;
+          return kOfxStatErrBadHandle;
         } catch (...) {
+          std::cerr << "[clipGetRegionOfDefinition] unknown exception clip=" << (clipInstance ? clipInstance->getName() : "null") << std::endl;
+          bounds->x1 = bounds->y1 = bounds->x2 = bounds->y2 = 0.;
           return kOfxStatErrBadHandle;
         }
       }

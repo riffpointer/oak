@@ -286,10 +286,11 @@ void OlivePluginInstance::getProjectExtent(double &xSize, double &ySize) const
 }
 double OlivePluginInstance::getProjectPixelAspectRatio() const
 {
-	return Current::getInstance()
-		.currentVideoParams()
-		.pixel_aspect_ratio()
-		.toDouble();
+	double par = params_.pixel_aspect_ratio().toDouble();
+	if (par == 0.0) {
+		return 1.0; // default PAR when not explicitly set
+	}
+	return par;
 }
 double OlivePluginInstance::getFrameRate() const
 {
@@ -550,7 +551,49 @@ OFX::Host::ImageEffect::ClipInstance *OlivePluginInstance::newClipInstance(
 	int index)
 {
 	// Create a new clip instance
-	OFX::Host::ImageEffect::ClipInstance* clipInstance = new OliveClipInstance(plugin, *descriptor, params_);
+	OliveClipInstance* clipInstance = new OliveClipInstance(plugin, *descriptor, params_);
+
+	// Initialize base class clip properties from VideoParams so that
+	// setupClipPreferencesArgs and plugin constructors (which may fetch
+	// clips and query their properties before getClipPreferences is called)
+	// have valid defaults instead of kOfxImageComponentNone / kOfxBitDepthNone.
+	std::string depth = kOfxBitDepthFloat;  // host default
+	std::string comp = kOfxImageComponentRGBA; // host default
+
+	switch (params_.format()) {
+	case core::PixelFormat::U8:
+		depth = kOfxBitDepthByte;
+		break;
+	case core::PixelFormat::U16:
+		depth = kOfxBitDepthShort;
+		break;
+	case core::PixelFormat::F16:
+		depth = kOfxBitDepthHalf;
+		break;
+	case core::PixelFormat::F32:
+		depth = kOfxBitDepthFloat;
+		break;
+	default:
+		break; // keep F32 default
+	}
+
+	switch (params_.channel_count()) {
+	case 1:
+		comp = kOfxImageComponentAlpha;
+		break;
+	case 3:
+		comp = kOfxImageComponentRGB;
+		break;
+	case 4:
+		comp = kOfxImageComponentRGBA;
+		break;
+	default:
+		break; // keep RGBA default
+	}
+
+	clipInstance->setPixelDepth(depth);
+	clipInstance->setComponents(comp);
+
 	return clipInstance;
 }
 

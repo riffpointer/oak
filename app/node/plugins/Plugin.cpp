@@ -239,9 +239,7 @@ BuildDefaultValues(const std::map<std::string, OFX::Host::Param::Instance *> &pa
 			continue;
 		}
 		const auto &props = param.second->getProperties();
-		if (props.getIntProperty(kOfxParamPropSecret) != 0) {
-			continue;
-		}
+		bool is_secret = props.getIntProperty(kOfxParamPropSecret) != 0;
 		const QString input_id =
 			QString::fromStdString(param.second->getName());
 		if (input_id.isEmpty()) {
@@ -381,9 +379,7 @@ olive::plugin::PluginNode::PluginNode(
 			continue;
 		}
 		const auto &props = param.second->getProperties();
-		if (props.getIntProperty(kOfxParamPropSecret) != 0) {
-			continue;
-		}
+		bool is_secret = props.getIntProperty(kOfxParamPropSecret) != 0;
 		if (type == NodeValue::kNone) {
 			continue;
 		}
@@ -395,6 +391,9 @@ olive::plugin::PluginNode::PluginNode(
 			}
 		} else {
 			AddInput(input_id, type);
+		}
+		if (is_secret) {
+			SetInputFlag(input_id, kInputFlagHidden);
 		}
 		const QString label =
 			QString::fromStdString(param.second->getLabel());

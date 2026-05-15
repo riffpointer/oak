@@ -112,7 +112,16 @@ public:
 		: OFX::Host::Param::IntegerInstance(descriptor, paramSet)
 		, _node(node)
 		, _descriptor(descriptor)
-	{}
+		, id(_descriptor.getName().c_str())
+	{
+		try {
+			value_ = _descriptor.getProperties().getIntProperty(kOfxParamPropDefault);
+			has_value_ = true;
+		} catch (...) {
+			value_ = 0;
+			has_value_ = false;
+		}
+	}
 	void SetNode(const std::shared_ptr<PluginNode> &new_node) override
 	{
 		_node = new_node;
@@ -128,7 +137,7 @@ public:
 		}
 		QVariant variant=_node->GetStandardValue(id);
 
-		if (variant.typeId()==QVariant::Int) {
+		if (variant.canConvert<int>()) {
 			a=variant.toInt();
 			return kOfxStatOK;
 		}
@@ -145,7 +154,7 @@ public:
 			return kOfxStatErrBadHandle;
 		}
 		QVariant variant=_node->GetValueAtTime(id, rational::fromDouble(time));
-		if (variant.typeId()==QVariant::Int) {
+		if (variant.canConvert<int>()) {
 			data=variant.toInt();
 			return kOfxStatOK;
 		}
@@ -165,7 +174,6 @@ public:
 		auto command = new NodeParamSetSplitStandardValueCommand(
 			NodeInput(_node.get(), _descriptor.getName().c_str()), split);
 		SubmitUndoCommand(_node, command, ParamChangeLabel(_descriptor));
-		id=_descriptor.getName().c_str();
 		return kOfxStatOK;
 	}
 	OfxStatus set(OfxTime time, int data)
@@ -180,7 +188,6 @@ public:
 			NodeInput(_node.get(), _descriptor.getName().c_str()),
 			rational::fromDouble(time), data, 0, command, true);
 		SubmitUndoCommand(_node, command, ParamChangeLabel(_descriptor));
-		id=_descriptor.getName().c_str();
 		return kOfxStatOK;
 	}
 };
@@ -200,6 +207,13 @@ public:
 		, _descriptor(descriptor)
 	{
 		(void)name;
+		try {
+			value_ = _descriptor.getProperties().getDoubleProperty(kOfxParamPropDefault);
+			has_value_ = true;
+		} catch (...) {
+			value_ = 0.0;
+			has_value_ = false;
+		}
 	}
 	void SetNode(const std::shared_ptr<PluginNode> &new_node) override
 	{
@@ -315,6 +329,8 @@ public:
 		, _descriptor(descriptor)
 	{
 		(void)name;
+		value_ = DefaultValue();
+		has_value_ = true;
 	}
 	void SetNode(const std::shared_ptr<PluginNode> &new_node) override
 	{
@@ -403,6 +419,13 @@ public:
 		, _descriptor(descriptor)
 	{
 		(void)name;
+		try {
+			value_ = _descriptor.getProperties().getIntProperty(kOfxParamPropDefault);
+			has_value_ = true;
+		} catch (...) {
+			value_ = 0;
+			has_value_ = false;
+		}
 	}
 	void SetNode(const std::shared_ptr<PluginNode> &new_node) override
 	{
@@ -1135,6 +1158,13 @@ public:
 		, _descriptor(descriptor)
 	{
 		(void)name;
+		try {
+			value_ = _descriptor.getProperties().getStringProperty(kOfxParamPropDefault);
+			has_value_ = true;
+		} catch (...) {
+			value_.clear();
+			has_value_ = false;
+		}
 	}
 	void SetNode(const std::shared_ptr<PluginNode> &new_node) override
 	{
