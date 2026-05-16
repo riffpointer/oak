@@ -1493,7 +1493,11 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 	// failure and would otherwise crash the render thread.
 	bool ok = false;
 	try {
-		ok = instance->getClipPreferences();
+		if (instance->areClipPrefsDirty()) {
+			ok = instance->getClipPreferences();
+		} else {
+			ok = true;
+		}
 	} catch (const OFX::Host::Property::Exception &e) {
 		qWarning().noquote() << "OFX getClipPreferences threw exception for plugin="
 							 << PluginIdForInstance(instance)
@@ -1657,6 +1661,10 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 								  renderScale, true, interactive);
 		return;
 	}
+
+	// Inject current parameter values into the OFX instance before rendering.
+	// Parameters are bound to PluginNode inputs, so they change every frame.
+	ApplyParamOverrides(*instance, job.GetValues(), frame);
 
 	// render a frame
 	const char *render_field = GetRenderFieldForParams(output_params);

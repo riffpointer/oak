@@ -628,15 +628,24 @@ TexturePtr RenderProcessor::ProcessPluginJob(TexturePtr texture,
 		return destination;
 	}
 
-	if (!plugin_renderer_) {
-		auto *gl = dynamic_cast<OpenGLRenderer *>(render_ctx_);
-		if (!gl || !gl->context()) {
-			return destination;
+	plugin::PluginRenderer *plugin_renderer = nullptr;
+	{
+		thread_local static std::shared_ptr<plugin::PluginRenderer>
+			cached_plugin_renderer;
+		if (!cached_plugin_renderer) {
+			auto *gl = dynamic_cast<OpenGLRenderer *>(render_ctx_);
+			if (gl && gl->context()) {
+				cached_plugin_renderer =
+					std::make_shared<plugin::PluginRenderer>();
+				cached_plugin_renderer->Init(gl->context());
+				cached_plugin_renderer->PostInit();
+			}
 		}
+		plugin_renderer = cached_plugin_renderer.get();
+	}
 
-		plugin_renderer_ = std::make_unique<plugin::PluginRenderer>();
-		plugin_renderer_->Init(gl->context());
-		plugin_renderer_->PostInit();
+	if (!plugin_renderer) {
+		return destination;
 	}
 
 	NodeValueRow &values = plugin_job->GetValues();
@@ -687,7 +696,7 @@ TexturePtr RenderProcessor::ProcessPluginJob(TexturePtr texture,
 		}
 	}
 
-	plugin_renderer_->RenderPlugin(
+	plugin_renderer->RenderPlugin(
 		src,
 		*plugin_job,
 		destination,
