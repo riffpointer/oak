@@ -559,6 +559,21 @@ void olive::plugin::OliveClipInstance::setDefaultRegionOfDefinition(
 	defaultRegionOfDefinitions_ = regionOfDefinition;
 }
 
+void olive::plugin::OliveClipInstance::pruneImagesCache()
+{
+	// Do not prune output clip images; they may have external references
+	// added by getImage()/addReference() and are typically single-frame.
+	if (name_ == kOfxImageEffectOutputClipName) {
+		return;
+	}
+	while (images_.size() > kMaxInputImageCache) {
+		auto it = images_.begin();
+		Image *img = it.value();
+		images_.erase(it);
+		delete img;
+	}
+}
+
 void olive::plugin::OliveClipInstance::setParams(const VideoParams &params)
 {
 	params_ = params;
@@ -567,7 +582,7 @@ void olive::plugin::OliveClipInstance::setParams(const VideoParams &params)
 	setComponents(getUnmappedComponents());
 }
 
-void olive::plugin::OliveClipInstance::setInputTexture(TexturePtr texture, OfxTime time){
+void olive::plugin::OliveClipInstance::setInputTexture(TexturePtr texture, OfxTime time, bool readback_cpu){
 	if (!texture) {
 		return;
 	}
@@ -592,6 +607,14 @@ void olive::plugin::OliveClipInstance::setInputTexture(TexturePtr texture, OfxTi
 #ifdef OFX_SUPPORTS_OPENGLRENDER
 	input_textures_.insert(time, texture);
 #endif
+
+	// In OpenGL render path, skip CPU readback entirely.
+	// The plugin will fetch input via loadTexture() using GPU texture IDs.
+	// If the plugin falls back to getImage(), it will be created on-demand
+	// in getImage() with zero-initialized data.
+	if (!readback_cpu) {
+		return;
+	}
 
 	AVFramePtr frame = texture->frame();
 	if (!frame || !frame->data[0]) {
@@ -620,6 +643,7 @@ void olive::plugin::OliveClipInstance::setInputTexture(TexturePtr texture, OfxTi
 										regionOfDefinition, false);
 		images_.insert(time, image);
 	}
+	pruneImagesCache();
 
 	uint8_t *dst = (uint8_t*)image->data();
 	if (!dst) {
@@ -679,9 +703,13 @@ copy_pixels:
 	int copy_height = std::min(image->height(), src_frame->height);
 
 	const uint8_t *src = src_frame->data[0];
-	for (int y = 0; y < copy_height; ++y) {
-		std::memcpy(dst + y * dst_row_bytes, src + y * src_row_bytes,
-					copy_bytes);
+	if (dst_row_bytes == src_row_bytes && src_row_bytes == copy_bytes) {
+		std::memcpy(dst, src, copy_bytes * copy_height);
+	} else {
+		for (int y = 0; y < copy_height; ++y) {
+			std::memcpy(dst + y * dst_row_bytes, src + y * src_row_bytes,
+						copy_bytes);
+		}
 	}
 
 	

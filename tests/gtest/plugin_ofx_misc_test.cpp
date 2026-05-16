@@ -604,25 +604,25 @@ TEST(PluginMisc, ListAvailablePlugins)
 	SUCCEED();
 }
 
-TEST(PluginMisc, CImgGuided_MultiInput)
+TEST(PluginMisc, CImgBilateralGuided_MultiInput)
 {
 	if (ShouldSkipTest()) GTEST_SKIP() << "OFX integration test not enabled";
-	// CImgGuided is a multi-input plugin (Source + Mask).
+	// CImgBilateralGuided is a multi-input plugin (Source + Guide).
 	// This test verifies that connecting both inputs does not trigger
 	// the frame-rate mismatch exception in setupClipPreferencesArgs.
 	VideoParams params(320, 240, core::PixelFormat::F32, 4);
 	TexturePtr source = CreateSolidTexture(params, 0x80);
-	TexturePtr mask = CreateSolidTexture(params, 0x40);
+	TexturePtr guide  = CreateSolidTexture(params, 0x40);
 	ASSERT_NE(source, nullptr);
-	ASSERT_NE(mask, nullptr);
+	ASSERT_NE(guide, nullptr);
 
 	NodeValueRow row;
 	row.insert(QString::fromStdString(kOfxImageEffectSimpleSourceClipName),
 			   NodeValue(NodeValue::kTexture, source));
-	row.insert(QStringLiteral("Mask"),
-			   NodeValue(NodeValue::kTexture, mask));
-	bool result = RenderPlugin("net.sf.cimg.CImgGuided", params, row, true);
-	EXPECT_TRUE(result) << "CImgGuided plugin should produce output with both Source and Mask connected";
+	row.insert(QStringLiteral("Guide"),
+			   NodeValue(NodeValue::kTexture, guide));
+	bool result = RenderPlugin("net.sf.cimg.CImgBilateralGuided", params, row, true);
+	EXPECT_TRUE(result) << "CImgBilateralGuided plugin should produce output with both Source and Guide connected";
 }
 
 } // namespace test

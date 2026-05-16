@@ -70,11 +70,17 @@ public:
 												 const OfxRectD *optionalBounds) override;
 #   endif
 
-	void setInputTexture(TexturePtr texture, OfxTime time);
+	void setInputTexture(TexturePtr texture, OfxTime time, bool readback_cpu = true);
 	void setOutputTexture(TexturePtr texture, OfxTime time);
 
 	// Get the plugin-preferred VideoParams based on base class _pixelDepth/_components
 	VideoParams getPluginPreferredParams() const;
+
+	// Prune old entries from the images_ cache to prevent unbounded growth.
+	// Output clip images are not pruned (they are typically single-frame).
+	void pruneImagesCache();
+
+	static constexpr int kMaxInputImageCache = 8;
 
 private:
 	VideoParams params_;

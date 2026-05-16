@@ -40,7 +40,6 @@
 #include <QVector2D>
 #include <QVector3D>
 #include <QVector4D>
-#define GL_PREAMBLE //QMutexLocker __l(&global_opengl_mutex);
 #include "pluginrenderer.h"
 #include "core.h"
 #include "undo/undostack.h"
@@ -700,10 +699,14 @@ static olive::AVFramePtr create_avframe_from_ofx_image(OFX::Host::ImageEffect::I
 	}
 
 	const int copy_bytes = width * bytes_per_pixel;
-	for (int y = 0; y < height; ++y) {
-		std::memcpy(frame->data[0] + y * frame->linesize[0],
-					src + y * row_bytes,
-					copy_bytes);
+	if (frame->linesize[0] == row_bytes && row_bytes == copy_bytes) {
+		std::memcpy(frame->data[0], src, copy_bytes * height);
+	} else {
+		for (int y = 0; y < height; ++y) {
+			std::memcpy(frame->data[0] + y * frame->linesize[0],
+						src + y * row_bytes,
+						copy_bytes);
+		}
 	}
 
 	return frame;
@@ -789,10 +792,15 @@ static olive::AVFramePtr create_avframe_from_ofx_image_with_params(
 			src_frame->format = src_fmt;
 			if (av_frame_get_buffer(src_frame.get(), 0) >= 0) {
 
-				// Copy source data row by row
-				for (int y = 0; y < height; ++y) {
-					memcpy(src_frame->data[0] + y * src_frame->linesize[0],
-						   src + y * row_bytes, width * src_bytes_per_pixel);
+				// Copy source data row by row (or as a single block if strides match)
+				const int copy_bytes = width * src_bytes_per_pixel;
+				if (src_frame->linesize[0] == row_bytes && row_bytes == copy_bytes) {
+					memcpy(src_frame->data[0], src, copy_bytes * height);
+				} else {
+					for (int y = 0; y < height; ++y) {
+						memcpy(src_frame->data[0] + y * src_frame->linesize[0],
+							   src + y * row_bytes, copy_bytes);
+					}
 				}
 				// Convert to destination format
 				return ConvertFrameIfNeeded(src_frame, params, renderer);
@@ -1471,7 +1479,9 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 		if (is_usable_input(input_tex)) {
 			input_textures[entry.first] = input_tex;
 			olive::VideoParams params = input_tex->params();
-			input_clip->setInputTexture(input_tex, frame);
+			// First pass: set params only, no CPU readback yet.
+			// Readback will happen below (CPU path) or be skipped entirely (GL path).
+			input_clip->setInputTexture(input_tex, frame, false);
 			input_clips[entry.first] = input_clip;
 		}
 	}
@@ -1549,11 +1559,6 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 		}
 		const QString clip_key = QString::fromStdString(entry.first);
 		TexturePtr input_tex = input_textures[entry.first];
-		if (!use_opengl) {
-			AVFramePtr ptr =
-				ReadbackTextureToFrame(input_tex, input_tex->params());
-			input_tex->handleFrame(ptr);
-		}
 		if (is_usable_input(input_tex)) {
 			// Query the plugin descriptor for supported pixel depths and pick
 			// the best one according to our priority: F32 > U16 > U8 > F16.
@@ -1572,7 +1577,7 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 				}
 			}
 
-			input_clip->setInputTexture(input_tex, frame);
+			input_clip->setInputTexture(input_tex, frame, !use_opengl);
 			OfxRectD rod;
 			rod.x1 = 0;
 			rod.y1 = 0;
@@ -1738,34 +1743,15 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 				<< PluginIdForInstance(instance);
 		}
 	} else {
-		AVFramePtr frame_ptr =
-			ReadbackTextureToFrame(destination, destination_params);
+		// OpenGL path: plugin has already rendered directly into the destination
+		// texture via FBO/GL. No CPU readback or conversion needed.
 #ifdef OFX_SUPPORTS_OPENGLRENDER
 		DetachOutputTexture();
 		instance->contextDetachedAction();
 #endif
-		if (frame_ptr && destination) {
-			AVFramePtr converted =
-				ConvertFrameIfNeeded(frame_ptr, destination_params, this);
-			const AVPixelFormat expected_fmt =
-				GetDestinationAVPixelFormat(destination_params);
-			destination->handleFrame(converted);
-			if (destination->renderer() && converted && converted->data[0] &&
-				(expected_fmt == AV_PIX_FMT_NONE ||
-				 converted->format == expected_fmt)) {
-				int linesize_pixels = LinesizeToPixels(destination_params,
-													   converted->linesize[0]);
-				if (linesize_pixels <= 0) {
-					linesize_pixels = destination_params.effective_width();
-				}
-				destination->Upload(converted->data[0], linesize_pixels);
-			} else if (destination->renderer() && converted &&
-					   converted->data[0]) {
-				qWarning().noquote()
-					<< "OFX output pixel format mismatch for plugin="
-					<< PluginIdForInstance(instance);
-			}
-		}
+		instance->endRenderAction(frame, numFramesToRender, 1.0, interactive,
+								  renderScale, true, interactive);
+		return;
 	}
 
 	instance->endRenderAction(frame, numFramesToRender, 1.0, interactive, renderScale, true,interactive

@@ -63,7 +63,7 @@ QVector<ViewerWidget *> ViewerWidget::instances_;
 //       changing values. 1/4 second seems to be a good middleground.
 const rational ViewerWidget::kAudioPlaybackInterval = rational(1, 4);
 
-const rational kVideoPlaybackInterval = rational(1, 2);
+const rational kVideoPlaybackInterval = rational(1, 10);
 
 ViewerWidget::ViewerWidget(ViewerDisplayWidget *display, QWidget *parent)
 	: super(false, true, parent)
@@ -1146,6 +1146,12 @@ void ViewerWidget::PauseInternal()
 			dw->Pause();
 		}
 
+		// Cancel in-flight render tickets before deleting watchers,
+		// otherwise the render thread keeps working on stale frames
+		// and blocks the single-frame render requested by UpdateTextureFromNode().
+		foreach (RenderTicketWatcher *watcher, queue_watchers_) {
+			watcher->Cancel();
+		}
 		qDeleteAll(queue_watchers_);
 		queue_watchers_.clear();
 		RenderManager::instance()->GetCacher()->ClearSingleFrameRenders();
@@ -1480,7 +1486,12 @@ void ViewerWidget::RendererGeneratedFrameForQueue()
 						static_cast<double>(playback_step));
 				if (start_ms > 0 &&
 					(now_ms - start_ms) > frame_interval_ms) {
-					drop_frame = true;
+					// If the queue is nearly empty, keep the frame anyway
+					// to prevent the viewer from freezing entirely when
+					// rendering can't keep up with playback speed.
+					if (display_widget_->queue()->size() >= 2) {
+						drop_frame = true;
+					}
 				}
 
 				rational ts = watcher->property("time").value<rational>();
