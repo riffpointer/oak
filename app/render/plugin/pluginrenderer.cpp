@@ -32,6 +32,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <mutex>
 #include <qtypes.h>
 #include <string>
 #include <vector>
@@ -1378,6 +1379,21 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 	if (!instance) {
 		return;
 	}
+
+	// Lock the plugin instance to prevent concurrent access from multiple
+	// RenderProcessors. OlivePluginInstance (and its OliveClipInstance) are not
+	// thread-safe; concurrent calls to setInputTexture/renderAction can corrupt
+	// internal QMap/images_ and params_, leading to invalid pointers being
+	// passed to CImg and subsequent SIGSEGV.
+	std::mutex *instance_mutex = nullptr;
+	if (auto *olive_inst = dynamic_cast<olive::plugin::OlivePluginInstance *>(instance)) {
+		instance_mutex = &olive_inst->mutex();
+	} else {
+		static std::mutex fallback_mutex;
+		instance_mutex = &fallback_mutex;
+	}
+	std::lock_guard<std::mutex> instance_lock(*instance_mutex);
+
 	bool supports_opengl = false;
 #ifdef OFX_SUPPORTS_OPENGLRENDER
 	const std::string &gl_supported =
@@ -1552,6 +1568,16 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 
 	// set correct format for input
 
+	// Ensure all input textures are fully rendered before CPU readback.
+	// BlitColorManaged may have executed in a different shared OpenGL context;
+	// glFinish() in our context does NOT wait for commands in that context,
+	// so we must flush the renderer that actually produced the texture.
+	for (const auto &entry : input_textures) {
+		if (entry.second && entry.second->renderer()) {
+			entry.second->renderer()->Flush();
+		}
+	}
+
 	auto &descriptor = instance->getDescriptor();
 	for (const auto &entry : input_clips) {
 		if (entry.first == kOfxImageEffectOutputClipName) {
@@ -1668,6 +1694,10 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 
 	// render a frame
 	const char *render_field = GetRenderFieldForParams(output_params);
+	qDebug() << "[PLUGIN] RenderPlugin use_opengl=" << use_opengl
+			 << "time=" << frame
+			 << "plugin=" << PluginIdForInstance(instance)
+			 << "dest_valid=" << (destination ? destination->id().isValid() : false);
 	stat = instance->renderAction(frame, render_field, renderWindow, renderScale,
 								  true, interactive, interactive);
 	if (stat != kOfxStatOK && stat != kOfxStatReplyDefault) {
@@ -1708,6 +1738,19 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 									  renderScale, true, interactive);
 			return;
 		}
+		// Diagnostic: peek at first few pixels
+		void *img_data = output_image->getPointerProperty(kOfxImagePropData);
+		bool img_black = true;
+		if (img_data) {
+			float *f = static_cast<float *>(img_data);
+			for (int i = 0; i < 16; ++i) {
+				if (f[i] != 0.0f) {
+					img_black = false;
+					break;
+				}
+			}
+		}
+		qDebug() << "[PLUGIN] output_image black=" << img_black << "plugin=" << PluginIdForInstance(instance);
 		} else {
 		if (!destination || !destination->id().isValid()) {
 #ifdef OFX_SUPPORTS_OPENGLRENDER
@@ -1753,6 +1796,7 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 	} else {
 		// OpenGL path: plugin has already rendered directly into the destination
 		// texture via FBO/GL. No CPU readback or conversion needed.
+		qDebug() << "[PLUGIN] OpenGL path done, returning directly";
 #ifdef OFX_SUPPORTS_OPENGLRENDER
 		DetachOutputTexture();
 		instance->contextDetachedAction();

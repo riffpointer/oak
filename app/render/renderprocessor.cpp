@@ -151,6 +151,19 @@ FramePtr RenderProcessor::GenerateFrame(TexturePtr texture,
 		render_ctx_->DownloadFromTexture(texture->id(), texture->params(),
 										 frame->data(),
 										 frame->linesize_pixels());
+
+		// Diagnostic: check if downloaded frame is all black
+		bool all_black = true;
+		const uint8_t *pixels = reinterpret_cast<const uint8_t *>(frame->data());
+		size_t total_bytes = frame->allocated_size();
+		for (size_t i = 0; i < std::min(total_bytes, size_t(1024)); ++i) {
+			if (pixels[i] != 0) {
+				all_black = false;
+				break;
+			}
+		}
+		qDebug() << "[RENDER] GenerateFrame DownloadFromTexture all_black="
+				 << all_black << "total_bytes=" << total_bytes;
 	}
 
 	return frame;
@@ -196,6 +209,9 @@ void RenderProcessor::Run()
 		}
 
 		TexturePtr texture = GenerateTexture(time, frame_length);
+		qDebug() << "[RENDER] GenerateTexture time=" << time.toDouble()
+			 << "tex_null=" << (texture == nullptr)
+			 << "tex_dummy=" << (texture ? texture->IsDummy() : true);
 
 		if (!render_ctx_) {
 			ticket_->Finish();
@@ -219,6 +235,7 @@ void RenderProcessor::Run()
 			if (HeardCancel()) {
 				// Finish cancelled ticket with nothing since we can't guarantee the frame we generated
 				// is actually "complete
+				qDebug() << "[RENDER] HeardCancel, finishing empty";
 				ticket_->Finish();
 			} else {
 				FramePtr frame;
@@ -252,7 +269,7 @@ void RenderProcessor::Run()
 					}
 
 					render_ctx_->Flush();
-
+					qDebug() << "[RENDER] Finishing with texture";
 					ticket_->Finish(QVariant::fromValue(texture));
 				} else {
 					ticket_->Finish(QVariant::fromValue(frame));
@@ -486,6 +503,9 @@ void RenderProcessor::ProcessVideoFootage(TexturePtr destination,
 					}
 
 					render_ctx_->BlitColorManaged(job, destination.get());
+					// macOS TBDR: ensure tile writeback completes before the texture
+					// is read back in a potentially different shared OpenGL context.
+					render_ctx_->Flush();
 				}
 			}
 		}
@@ -711,6 +731,27 @@ TexturePtr RenderProcessor::ProcessVideoCacheJob(const CacheJob *val)
 {
 	FramePtr frame = FrameHashCache::LoadCacheFrame(val->GetFilename());
 	if (frame) {
+		// Auto-detect and discard black/empty cached frames (macOS TBDR artifact)
+		bool all_black = true;
+		if (frame->data() && frame->allocated_size() > 0) {
+			const uint8_t *pixels = reinterpret_cast<const uint8_t *>(frame->data());
+			size_t alloc_size = static_cast<size_t>(frame->allocated_size());
+			size_t check_bytes = std::min(alloc_size, size_t(4096));
+			for (size_t i = 0; i < check_bytes; ++i) {
+				if (pixels[i] != 0) {
+					all_black = false;
+					break;
+				}
+			}
+		}
+		if (all_black) {
+			qWarning() << "[CACHE] Discarding black cached frame:" << val->GetFilename()
+					   << "time=" << frame->timestamp().toDouble()
+					   << "size=" << frame->allocated_size();
+			QFile::remove(val->GetFilename());
+			return nullptr;
+		}
+
 		TexturePtr tex = CreateTexture(frame->video_params());
 		if (tex) {
 			tex->Upload(frame->data(), frame->linesize_pixels());

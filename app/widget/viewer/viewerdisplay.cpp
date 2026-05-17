@@ -382,11 +382,15 @@ void ViewerDisplayWidget::OnPaint()
 								 bg_color.blueF());
 
 	// We only draw if we have a pipeline
+	qDebug() << "[VIEWER] OnPaint push_mode=" << push_mode_
+			 << "color_service=" << (color_service() != nullptr)
+			 << "has_load_frame=" << !load_frame_.isNull();
 	if (push_mode_ != kPushNull) {
 		// Draw texture through color transform
 		VideoParams device_params = GetViewportParams();
 
 		if (push_mode_ == kPushBlank) {
+			qDebug() << "[VIEWER] OnPaint drawing blank";
 			DrawBlank(device_params);
 		} else if (color_service()) {
 			if (FramePtr frame = load_frame_.value<FramePtr>()) {
@@ -490,7 +494,10 @@ void ViewerDisplayWidget::OnPaint()
 				ctj.SetForceOpaque(true);
 
 				renderer()->BlitColorManaged(ctj, device_params);
+				qDebug() << "[VIEWER] OnPaint BlitColorManaged done";
 			}
+		} else {
+			qDebug() << "[VIEWER] OnPaint no color_service, skipping texture draw";
 		}
 	}
 

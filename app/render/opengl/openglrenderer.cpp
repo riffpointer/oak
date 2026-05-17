@@ -370,6 +370,9 @@ void OpenGLRenderer::DownloadFromTexture(const QVariant &id,
 
 	functions_->glPixelStorei(GL_PACK_ROW_LENGTH, linesize);
 
+	// Ensure all rendering is complete before reading back on TBDR architectures (macOS)
+	functions_->glFinish();
+
 	{
 		PRINT_GL_ERRORS;
 		functions_->glReadPixels(0, 0, p.effective_width(),
@@ -392,7 +395,14 @@ void OpenGLRenderer::Flush()
 	if (OLIVE_CONFIG("UseGLFinish").toBool()) {
 		functions_->glFinish();
 	} else {
+#if defined(Q_OS_MAC)
+		// macOS uses Tile-Based Deferred Rendering (TBDR). glFlush() does not
+		// guarantee that tile memory has been written back to texture memory.
+		// Using glFinish() prevents partial tile corruption ("black ink" artifacts).
+		functions_->glFinish();
+#else
 		functions_->glFlush();
+#endif
 	}
 }
 

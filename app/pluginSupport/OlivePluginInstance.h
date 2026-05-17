@@ -26,6 +26,7 @@
 #include "undo/undocommand.h"
 
 #include <map>
+#include <mutex>
 #include <QCoreApplication>
 #include <QPointer>
 #include <QThread>
@@ -223,6 +224,10 @@ private:
 	bool progress_cancelled_ = false;
 	bool progress_active_ = false;
 	bool open_gl_enabled_ = false;
+public:
+	std::mutex& mutex() { return mutex_; }
+private:
+	std::mutex mutex_;
 };
 }
 }

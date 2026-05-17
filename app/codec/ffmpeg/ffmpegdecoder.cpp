@@ -349,6 +349,21 @@ TexturePtr FFmpegDecoder::RetrieveVideoInternal(const RetrieveVideoParams &p)
 			return nullptr;
 		}
 
+		// Diagnostic: check if decoded frame is all black
+		bool all_black = true;
+		if (f->data[0]) {
+			int check_rows = std::min(f->height, 8);
+			int check_bytes = check_rows * f->linesize[0];
+			for (int i = 0; i < check_bytes; ++i) {
+				if (f->data[0][i] != 0) {
+					all_black = false;
+					break;
+				}
+			}
+		}
+		qDebug() << "[DECODER] RetrieveVideoInternal time=" << p.time.toDouble()
+				 << "format=" << static_cast<int>(f->format) << "black=" << all_black;
+
 		// Finally, perform any GPU processing required
 		TexturePtr texture = ProcessFrameIntoTexture(f, p, original);
 

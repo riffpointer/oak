@@ -205,6 +205,9 @@ void ViewerWidget::TimeChangedEvent(const rational &time)
 
 	if (GetConnectedNode() && last_time_ != time) {
 		if (!IsPlaying()) {
+			qDebug() << "[VIEWER] TimeChanged seeking to" << time.toDouble()
+					 << "frame_exists=" << FrameExistsAtTime(time)
+					 << "might_be_still=" << ViewerMightBeAStill();
 			UpdateTextureFromNode();
 
 			PushScrubbedAudio();
@@ -1445,16 +1448,30 @@ void ViewerWidget::WindowAboutToClose()
 void ViewerWidget::RendererGeneratedFrame()
 {
 	RenderTicketWatcher *ticket = static_cast<RenderTicketWatcher *>(sender());
+	rational t = ticket->property("time").value<rational>();
+	bool has_result = ticket->HasResult();
+	qDebug() << "[VIEWER] RendererGeneratedFrame time=" << t.toDouble()
+			 << "has_result=" << has_result
+			 << "nonqueue_size=" << nonqueue_watchers_.size();
 
-	if (ticket->HasResult()) {
-		if (nonqueue_watchers_.contains(ticket)) {
-			while (!nonqueue_watchers_.isEmpty()) {
-				// Pop frames that are "old"
-				if (nonqueue_watchers_.takeFirst() == ticket) {
-					break;
-				}
+	if (nonqueue_watchers_.contains(ticket)) {
+		while (!nonqueue_watchers_.isEmpty()) {
+			// Pop frames that are "old"
+			if (nonqueue_watchers_.takeFirst() == ticket) {
+				break;
 			}
+		}
 
+		if (ticket->HasResult()) {
+			QVariant v = ticket->Get();
+			bool is_tex = v.canConvert<TexturePtr>();
+			bool is_frame = v.canConvert<FramePtr>();
+			TexturePtr tex = v.value<TexturePtr>();
+			qDebug() << "[VIEWER] SetDisplayImage time=" << t.toDouble()
+					 << "is_texture=" << is_tex
+					 << "is_frame=" << is_frame
+					 << "tex_null=" << (tex == nullptr)
+					 << "tex_dummy=" << (tex ? tex->IsDummy() : true);
 			SetDisplayImage(ticket->GetTicket());
 		}
 	}
