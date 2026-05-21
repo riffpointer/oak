@@ -639,11 +639,13 @@ void olive::plugin::OliveClipInstance::setInputTexture(TexturePtr texture, OfxTi
 		image->EnsureAllocatedFromParams(params_, bounds, regionOfDefinition,
 										 false);
 	} else {
+		pruneImagesCache();
 		image = new Image(*this, params_, bounds,
 										regionOfDefinition, false);
+		image->EnsureAllocatedFromParams(params_, bounds, regionOfDefinition,
+										 false);
 		images_.insert(time, image);
 	}
-	pruneImagesCache();
 
 	uint8_t *dst = (uint8_t*)image->data();
 	if (!dst) {
@@ -653,6 +655,35 @@ void olive::plugin::OliveClipInstance::setInputTexture(TexturePtr texture, OfxTi
 	if (!frame || !frame->data[0]) {
 		std::memset(dst, 0, image->row_bytes() * image->height());
 		return;
+	}
+
+	// Detect NaN/Inf in float input data before passing to CImg.
+	// CImg::blur_bilateral computes (int)round(val / sigma) which becomes
+	// undefined behaviour when val is NaN, leading to out-of-bounds indexing
+	// and SIGSEGV on Apple Silicon (where (int)NaN often evaluates to 0 or
+	// INT_MIN, causing huge offsets into bgrid._data).
+	if (params_.format() == core::PixelFormat::F32) {
+		const float *fptr = reinterpret_cast<const float*>(frame->data[0]);
+		int row_floats = frame->linesize[0] / static_cast<int>(sizeof(float));
+		bool has_nan = false;
+		for (int y = 0; y < params_.height() && !has_nan; ++y) {
+			for (int x = 0; x < params_.width() * params_.channel_count(); ++x) {
+				float v = fptr[y * row_floats + x];
+				if (std::isnan(v) || std::isinf(v)) {
+					qWarning() << "[PLUGIN] NaN/Inf detected in input frame at pixel ("
+							   << x / params_.channel_count() << "," << y
+							   << ") channel=" << (x % params_.channel_count())
+							   << " value=" << v;
+					has_nan = true;
+					break;
+				}
+			}
+		}
+		if (has_nan) {
+			qWarning() << "[PLUGIN] Filling corrupted input frame with black to avoid CImg crash";
+			std::memset(dst, 0, image->row_bytes() * image->height());
+			return;
+		}
 	}
 
 	AVFramePtr src_frame = frame;
@@ -703,7 +734,27 @@ copy_pixels:
 	int copy_height = std::min(image->height(), src_frame->height);
 
 	const uint8_t *src = src_frame->data[0];
-	if (dst_row_bytes == src_row_bytes && src_row_bytes == copy_bytes) {
+	if (params_.format() == core::PixelFormat::F32) {
+		const float *src_f = reinterpret_cast<const float*>(src);
+		float *dst_f = reinterpret_cast<float*>(dst);
+		int src_stride = src_row_bytes / static_cast<int>(sizeof(float));
+		int dst_stride = dst_row_bytes / static_cast<int>(sizeof(float));
+		int floats_per_row = copy_bytes / static_cast<int>(sizeof(float));
+		bool has_nan = false;
+		for (int y = 0; y < copy_height; ++y) {
+			for (int i = 0; i < floats_per_row; ++i) {
+				float v = src_f[y * src_stride + i];
+				if (std::isnan(v) || std::isinf(v)) {
+					v = 0.0f;
+					has_nan = true;
+				}
+				dst_f[y * dst_stride + i] = v;
+			}
+		}
+		if (has_nan) {
+			qWarning() << "[PLUGIN] NaN/Inf scrubbed from input frame data during copy";
+		}
+	} else if (dst_row_bytes == src_row_bytes && src_row_bytes == copy_bytes) {
 		std::memcpy(dst, src, copy_bytes * copy_height);
 	} else {
 		for (int y = 0; y < copy_height; ++y) {

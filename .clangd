@@ -1,7 +1,0 @@
-CompileFlags:
-  Add: []
-  Remove: [-mlongcalls, -fstrict-volatile-bitfields, -fno-shrink-wrap, -fno-tree-switch-conversion,  -mno-direct-extern-access]
-CompileFlags:
-  CompilationDatabase: build
-Diagnostics:
-  Suppress: ['drv_unknown_argument', 'unused-includes', 'pp_file_not_found']

@@ -162,8 +162,6 @@ FramePtr RenderProcessor::GenerateFrame(TexturePtr texture,
 				break;
 			}
 		}
-		qDebug() << "[RENDER] GenerateFrame DownloadFromTexture all_black="
-				 << all_black << "total_bytes=" << total_bytes;
 	}
 
 	return frame;
@@ -209,9 +207,6 @@ void RenderProcessor::Run()
 		}
 
 		TexturePtr texture = GenerateTexture(time, frame_length);
-		qDebug() << "[RENDER] GenerateTexture time=" << time.toDouble()
-			 << "tex_null=" << (texture == nullptr)
-			 << "tex_dummy=" << (texture ? texture->IsDummy() : true);
 
 		if (!render_ctx_) {
 			ticket_->Finish();
@@ -269,7 +264,6 @@ void RenderProcessor::Run()
 					}
 
 					render_ctx_->Flush();
-					qDebug() << "[RENDER] Finishing with texture";
 					ticket_->Finish(QVariant::fromValue(texture));
 				} else {
 					ticket_->Finish(QVariant::fromValue(frame));

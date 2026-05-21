@@ -18,7 +18,7 @@
 #ifndef OLIVE_HOST_H
 #define OLIVE_HOST_H
 #include "node/plugins/Plugin.h"
-#include  "ofxhHost.h"
+#include "ofxhHost.h"
 #include "ofxhImageEffectAPI.h"
 #include "ofxCore.h"
 #include "ofxhImageEffect.h"
@@ -31,28 +31,25 @@
 #include <list>
 #include <memory>
 #include <qlist.h>
-namespace olive {
-namespace plugin {
-enum class HostMessageType{
-	Error,
-	Warning,
-	Message
-};
-struct HostPersistentMessage{
+namespace olive
+{
+namespace plugin
+{
+enum class HostMessageType { Error, Warning, Message };
+struct HostPersistentMessage {
 	HostMessageType type;
 	QString message;
 };
 
-
 void loadPlugins(QString path);
-class OliveHost: public OFX::Host::ImageEffect::Host{
+class OliveHost : public OFX::Host::ImageEffect::Host {
 public:
-	OliveHost()=default;
+	OliveHost() = default;
 	~OliveHost() override;
 	void destroyInstance(OFX::Host::ImageEffect::Instance *instance);
 
 	bool pluginSupported(OFX::Host::ImageEffect::ImageEffectPlugin *plugin,
-		std::string &reason) const override
+						 std::string &reason) const override
 	{
 		if (!plugin) {
 			reason = "null plugin";
@@ -65,14 +62,14 @@ public:
 		return true;
 	};
 
-	OFX::Host::ImageEffect::Instance* newInstance(void *clientData,
-							OFX::Host::ImageEffect::ImageEffectPlugin* plugin,
-							OFX::Host::ImageEffect::Descriptor& desc,
-							const std::string& context) override;
+	OFX::Host::ImageEffect::Instance *
+	newInstance(void *clientData,
+				OFX::Host::ImageEffect::ImageEffectPlugin *plugin,
+				OFX::Host::ImageEffect::Descriptor &desc,
+				const std::string &context) override;
 
-
-	std::shared_ptr<OFX::Host::ImageEffect::Descriptor> makeDescriptor(
-		OFX::Host::ImageEffect::ImageEffectPlugin* plugin) override;
+	std::shared_ptr<OFX::Host::ImageEffect::Descriptor>
+	makeDescriptor(OFX::Host::ImageEffect::ImageEffectPlugin *plugin) override;
 
 	std::shared_ptr<OFX::Host::ImageEffect::Descriptor>
 	makeDescriptor(const OFX::Host::ImageEffect::Descriptor &rootContext,

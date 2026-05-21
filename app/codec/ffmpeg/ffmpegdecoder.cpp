@@ -361,9 +361,6 @@ TexturePtr FFmpegDecoder::RetrieveVideoInternal(const RetrieveVideoParams &p)
 				}
 			}
 		}
-		qDebug() << "[DECODER] RetrieveVideoInternal time=" << p.time.toDouble()
-				 << "format=" << static_cast<int>(f->format) << "black=" << all_black;
-
 		// Finally, perform any GPU processing required
 		TexturePtr texture = ProcessFrameIntoTexture(f, p, original);
 

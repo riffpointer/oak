@@ -152,7 +152,28 @@ static void ApplyParamOverrides(OFX::Host::ImageEffect::Instance &instance,
 			if (auto *param =
 					dynamic_cast<OFX::Host::Param::DoubleInstance *>(
 						entry.second)) {
-				param->set(time, value.data().toDouble());
+				double v = value.data().toDouble();
+				if (std::isnan(v) || std::isinf(v)) {
+					qWarning() << "[PLUGIN] NaN/Inf in double param" << key
+							   << "replacing with default";
+					auto *default_prop =
+						entry.second->getProperties().fetchDoubleProperty(
+							kOfxParamPropDefault);
+					v = default_prop ? default_prop->getValue() : 0.0;
+				}
+				auto *min_prop =
+					entry.second->getProperties().fetchDoubleProperty(
+						kOfxParamPropMin);
+				if (min_prop && v < min_prop->getValue()) {
+					v = min_prop->getValue();
+				}
+				auto *max_prop =
+					entry.second->getProperties().fetchDoubleProperty(
+						kOfxParamPropMax);
+				if (max_prop && v > max_prop->getValue()) {
+					v = max_prop->getValue();
+				}
+				param->set(time, v);
 			}
 			continue;
 		}
@@ -1694,10 +1715,6 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 
 	// render a frame
 	const char *render_field = GetRenderFieldForParams(output_params);
-	qDebug() << "[PLUGIN] RenderPlugin use_opengl=" << use_opengl
-			 << "time=" << frame
-			 << "plugin=" << PluginIdForInstance(instance)
-			 << "dest_valid=" << (destination ? destination->id().isValid() : false);
 	stat = instance->renderAction(frame, render_field, renderWindow, renderScale,
 								  true, interactive, interactive);
 	if (stat != kOfxStatOK && stat != kOfxStatReplyDefault) {
@@ -1750,7 +1767,6 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 				}
 			}
 		}
-		qDebug() << "[PLUGIN] output_image black=" << img_black << "plugin=" << PluginIdForInstance(instance);
 		} else {
 		if (!destination || !destination->id().isValid()) {
 #ifdef OFX_SUPPORTS_OPENGLRENDER
@@ -1796,7 +1812,6 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 	} else {
 		// OpenGL path: plugin has already rendered directly into the destination
 		// texture via FBO/GL. No CPU readback or conversion needed.
-		qDebug() << "[PLUGIN] OpenGL path done, returning directly";
 #ifdef OFX_SUPPORTS_OPENGLRENDER
 		DetachOutputTexture();
 		instance->contextDetachedAction();

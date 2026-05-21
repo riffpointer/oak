@@ -18,11 +18,6 @@
 cmake_minimum_required(VERSION 3.13 FATAL_ERROR)
 
 project(olive-editor VERSION 0.2.0 LANGUAGES CXX)
-if(${CMAKE_BUILD_TYPE} EQUAL Debug)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=memory -g")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=memory -g")
-set(CMAKE_EXE_LINKER_FLAGS  ${CMAKE_EXE_LINKER_FLAGS} -fsanitize=memory)
-endif ()
 
 
 set(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} -DOFX_SUPPORTS_OPENGLRENDER)
