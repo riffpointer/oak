@@ -103,6 +103,7 @@ jobs:
             mingw-w64-ucrt-x86_64-fmt
             mingw-w64-ucrt-x86_64-expat
             mingw-w64-ucrt-x86_64-portaudio
+            mingw-w64-ucrt-x86_64-make
 
       # ------------------------------------------------------------------
       # Configure
@@ -154,35 +155,38 @@ jobs:
       - name: Clone OpenFX-Misc
         run: git clone --recursive --depth 1 https://github.com/NatronGitHub/openfx-misc.git
 
-      - name: Build OpenFX-Misc plugins (Linux / macOS)
+      - name: Build OpenFX-Misc plugins (Unix)
         if: runner.os != 'Windows'
         run: |
-          cmake -S openfx-misc -B openfx-misc/build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release
-          cmake --build openfx-misc/build
+          cd openfx-misc
+          make -j4
+          sudo make install
+          PLUGIN_FILE=$(find /usr/OFX/Plugins /usr/local/OFX/Plugins . -name "*.ofx.bundle" -print -quit 2>/dev/null | head -1)
+          if [ -n "$PLUGIN_FILE" ]; then
+            PLUGIN_DIR=$(dirname "$PLUGIN_FILE")
+          else
+            PLUGIN_DIR="$PWD"
+          fi
+          echo "OAK_OFX_ITEST=1" >> "$GITHUB_ENV"
+          echo "OAK_OFX_PLUGIN_PATH=$PLUGIN_DIR" >> "$GITHUB_ENV"
+          echo "OAK_OFX_PLUGIN_ID=net.sf.openfx.ChromaKeyerPlugin" >> "$GITHUB_ENV"
 
       - name: Build OpenFX-Misc plugins (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
-          cmake -S openfx-misc -B openfx-misc/build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release
-          cmake --build openfx-misc/build
-
-      - name: Export OFX test environment
-        if: runner.os != 'Windows'
-        run: |
+          cd openfx-misc
+          make -j4
+          make install
+          PLUGIN_FILE=$(find /usr/OFX/Plugins /usr/local/OFX/Plugins . -name "*.ofx.bundle" -print -quit 2>/dev/null | head -1)
+          if [ -n "$PLUGIN_FILE" ]; then
+            PLUGIN_DIR=$(dirname "$PLUGIN_FILE")
+          else
+            PLUGIN_DIR="$PWD"
+          fi
           echo "OAK_OFX_ITEST=1" >> "$GITHUB_ENV"
-          echo "OAK_OFX_PLUGIN_PATH=${PWD}/openfx-misc/build" >> "$GITHUB_ENV"
+          echo "OAK_OFX_PLUGIN_PATH=$PLUGIN_DIR" >> "$GITHUB_ENV"
           echo "OAK_OFX_PLUGIN_ID=net.sf.openfx.ChromaKeyerPlugin" >> "$GITHUB_ENV"
-
-      - name: Export OFX test environment (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          "OAK_OFX_ITEST=1" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "OAK_OFX_PLUGIN_PATH=$env:GITHUB_WORKSPACE\openfx-misc\build" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "OAK_OFX_PLUGIN_ID=net.sf.openfx.ChromaKeyerPlugin" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       # ------------------------------------------------------------------
       # Run all tests (including previously environment-gated OFX tests)
