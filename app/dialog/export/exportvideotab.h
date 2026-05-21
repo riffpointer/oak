@@ -26,7 +26,7 @@
 #include <QComboBox>
 #include <QWidget>
 
-#include "common/qtutils.h"
+#include "olive/common/qtutils.h"
 #include "dialog/export/codec/av1section.h"
 #include "dialog/export/codec/cineformsection.h"
 #include "dialog/export/codec/codecstack.h"

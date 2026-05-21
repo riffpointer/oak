@@ -24,7 +24,7 @@
 #include <QCheckBox>
 #include <QDebug>
 
-#include "common/qtutils.h"
+#include "olive/common/qtutils.h"
 #include "core.h"
 #include "dialog/speedduration/speeddurationdialog.h"
 #include "node/group/group.h"

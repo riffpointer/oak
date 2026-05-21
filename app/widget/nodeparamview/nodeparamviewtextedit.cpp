@@ -24,7 +24,7 @@
 #include <QHBoxLayout>
 
 #include "dialog/text/text.h"
-#include "ui/icons/icons.h"
+#include "olive/common/icons.h"
 
 namespace olive
 {

@@ -26,8 +26,8 @@
 #include <QPainter>
 #include <QtMath>
 
-#include "common/qtutils.h"
-#include "common/range.h"
+#include "olive/common/qtutils.h"
+#include "olive/common/range.h"
 #include "core.h"
 #include "dialog/markerproperties/markerpropertiesdialog.h"
 #include "node/project/serializer/serializer.h"

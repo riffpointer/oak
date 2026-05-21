@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "mainwindowlayoutinfo.h"
+#include "window/mainwindowlayoutinfo.h"
 
 namespace olive
 {

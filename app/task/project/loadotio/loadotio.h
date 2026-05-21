@@ -24,7 +24,7 @@
 
 #ifdef USE_OTIO
 
-#include "common/otioutils.h"
+#include "olive/common/otioutils.h"
 #include "node/project.h"
 #include "task/project/load/loadbasetask.h"
 

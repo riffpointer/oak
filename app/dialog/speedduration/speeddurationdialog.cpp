@@ -57,7 +57,7 @@ SpeedDurationDialog::SpeedDurationDialog(const QVector<ClipBlock *> &clips,
 		speed_layout->addWidget(new QLabel(tr("Speed:")), row, 0);
 
 		speed_slider_ = new FloatSlider();
-		speed_slider_->SetDisplayType(FloatSlider::kPercentage);
+		speed_slider_->SetDisplayType(kFloatPercentage);
 		connect(speed_slider_, &FloatSlider::ValueChanged, this,
 				&SpeedDurationDialog::SpeedChanged);
 		speed_layout->addWidget(speed_slider_, row, 1);
@@ -68,7 +68,7 @@ SpeedDurationDialog::SpeedDurationDialog(const QVector<ClipBlock *> &clips,
 
 		dur_slider_ = new RationalSlider();
 		dur_slider_->SetTimebase(timebase);
-		dur_slider_->SetDisplayType(RationalSlider::kTime);
+		dur_slider_->SetDisplayType(kRationalTime);
 		connect(dur_slider_, &RationalSlider::ValueChanged, this,
 				&SpeedDurationDialog::DurationChanged);
 		speed_layout->addWidget(dur_slider_, row, 1);

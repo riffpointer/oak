@@ -27,7 +27,7 @@
 #include <QVector3D>
 #include <QVector4D>
 
-#include "common/qtutils.h"
+#include "olive/common/qtutils.h"
 #include "core.h"
 #include "nodeparambutton.h"
 #include "node/group/group.h"

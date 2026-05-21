@@ -28,7 +28,7 @@
 #include <QVariant>
 
 #include "node/factory.h"
-#include "ui/icons/icons.h"
+#include "olive/common/icons.h"
 #include "widget/menu/menu.h"
 #include "widget/menu/menushared.h"
 

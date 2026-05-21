@@ -20,7 +20,7 @@
 // Audio headers
 #include "audio/audiomanager.h"
 #include "audio/audioprocessor.h"
-#include "audio/audiovisualwaveform.h"
+#include "render/audiovisualwaveform.h"
 #include "render/previewaudiodevice.h"
 #include "olive/core/render/samplebuffer.h"
 #include "olive/core/render/audioparams.h"

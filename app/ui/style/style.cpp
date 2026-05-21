@@ -30,7 +30,7 @@
 #include <QTextStream>
 
 #include "config/config.h"
-#include "ui/icons/icons.h"
+#include "olive/common/icons.h"
 
 namespace olive
 {

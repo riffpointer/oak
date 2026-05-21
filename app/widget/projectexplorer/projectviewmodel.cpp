@@ -25,7 +25,7 @@
 #include <QMimeData>
 #include <QUrl>
 
-#include "common/qtutils.h"
+#include "olive/common/qtutils.h"
 #include "core.h"
 #include "node/nodeundo.h"
 

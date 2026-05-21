@@ -24,7 +24,7 @@
 
 #include <QtGlobal>
 
-#include "common/define.h"
+#include "olive/common/define.h"
 
 namespace olive
 {

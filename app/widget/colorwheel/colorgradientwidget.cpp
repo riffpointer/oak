@@ -23,7 +23,7 @@
 
 #include <QPainter>
 
-#include "common/lerp.h"
+#include "olive/common/lerp.h"
 #include "node/node.h"
 
 namespace olive

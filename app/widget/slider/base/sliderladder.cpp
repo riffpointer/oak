@@ -32,8 +32,8 @@
 #include <ApplicationServices/ApplicationServices.h>
 #endif
 
-#include "common/lerp.h"
-#include "common/qtutils.h"
+#include "olive/common/lerp.h"
+#include "olive/common/qtutils.h"
 #include "config/config.h"
 
 namespace olive

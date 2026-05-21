@@ -43,10 +43,6 @@ public:
 		override_filename_ = filename;
 	}
 
-	void SetLayout(const MainWindowLayoutInfo &layout)
-	{
-		layout_ = layout;
-	}
 
 protected:
 	virtual bool Run() override;
@@ -58,7 +54,6 @@ private:
 
 	bool use_compression_;
 
-	MainWindowLayoutInfo layout_;
 };
 
 }

@@ -24,7 +24,7 @@
 
 #include <QKeySequenceEdit>
 
-#include "common/debug.h"
+#include "olive/common/debug.h"
 
 namespace olive
 {

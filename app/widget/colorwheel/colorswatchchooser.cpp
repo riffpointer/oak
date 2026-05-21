@@ -23,7 +23,7 @@
 
 #include <QGridLayout>
 
-#include "common/filefunctions.h"
+#include "olive/common/filefunctions.h"
 #include "widget/menu/menu.h"
 
 namespace olive

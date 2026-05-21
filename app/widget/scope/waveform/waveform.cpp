@@ -28,7 +28,7 @@
 #include <QVector2D>
 #include <QVector3D>
 
-#include "common/qtutils.h"
+#include "olive/common/qtutils.h"
 #include "config/config.h"
 #include "node/node.h"
 

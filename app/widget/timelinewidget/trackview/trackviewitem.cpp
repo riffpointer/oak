@@ -30,7 +30,7 @@
 
 #include "core.h"
 #include "timeline/timelineundogeneral.h"
-#include "ui/icons/icons.h"
+#include "olive/common/icons.h"
 #include "widget/menu/menu.h"
 
 namespace olive

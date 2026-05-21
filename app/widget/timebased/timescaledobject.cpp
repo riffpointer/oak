@@ -24,7 +24,7 @@
 #include <cfloat>
 #include <QtMath>
 
-#include "audio/audiovisualwaveform.h"
+#include "render/audiovisualwaveform.h"
 
 namespace olive
 {

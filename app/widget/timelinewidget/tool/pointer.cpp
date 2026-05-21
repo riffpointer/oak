@@ -24,8 +24,8 @@
 #include <QDebug>
 #include <QToolTip>
 
-#include "common/qtutils.h"
-#include "common/range.h"
+#include "olive/common/qtutils.h"
+#include "olive/common/range.h"
 #include "config/config.h"
 #include "core.h"
 #include "node/block/gap/gap.h"

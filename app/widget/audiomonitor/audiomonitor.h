@@ -26,8 +26,8 @@
 #include <QOpenGLWidget>
 #include <QTimer>
 
-#include "audio/audiovisualwaveform.h"
-#include "common/define.h"
+#include "render/audiovisualwaveform.h"
+#include "olive/common/define.h"
 #include "render/audiowaveformcache.h"
 
 namespace olive

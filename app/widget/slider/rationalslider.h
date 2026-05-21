@@ -27,6 +27,8 @@
 
 #include "base/decimalsliderbase.h"
 
+#include "olive/common/paramdisplay.h"
+
 namespace olive
 {
 
@@ -44,7 +46,7 @@ public:
 	/**
    * @brief enum containing the possibly display types
    */
-	enum DisplayType { kTime, kFloat, kRational };
+	using DisplayType = RationalDisplayType;
 
 	RationalSlider(QWidget *parent = nullptr);
 
@@ -71,7 +73,7 @@ public:
 	/**
    * @brief Sets the display type of the slider
    */
-	void SetDisplayType(const DisplayType &type);
+	void SetDisplayType(const RationalDisplayType &type);
 
 	/**
    * @brief Set whether the user can change the display type or not
@@ -86,7 +88,7 @@ public:
 	/**
    * @brief Hide display type in menu
    */
-	void DisableDisplayType(DisplayType type);
+	void DisableDisplayType(RationalDisplayType type);
 
 public slots:
 	/**
@@ -125,7 +127,7 @@ private slots:
 	void SetDisplayTypeFromMenu();
 
 private:
-	DisplayType display_type_;
+	RationalDisplayType display_type_;
 
 	rational timebase_;
 

@@ -25,6 +25,7 @@
 #include <QGridLayout>
 #include <QLabel>
 #include <QMessageBox>
+#include "render/diskmanager.h"
 
 
 namespace olive
@@ -122,6 +123,26 @@ void DiskCacheDialog::ClearDiskCache(const QString &path, QWidget *parent,
 				clear_btn->setText(tr("Disk Cache Partially Cleared"));
 		}
 	}
+}
+
+void DiskManager::ShowDiskCacheSettingsDialog(DiskCacheFolder *folder,
+											  QWidget *parent)
+{
+	DiskCacheDialog d(folder, parent);
+	d.exec();
+}
+
+void DiskManager::ShowDiskCacheSettingsDialog(const QString &path,
+											  QWidget *parent)
+{
+	if (!FileFunctions::DirectoryIsValid(path)) {
+		return;
+	}
+
+	DiskCacheFolder folder(path);
+	folder.SetLimit(DirectorySize(path));
+
+	ShowDiskCacheSettingsDialog(&folder, parent);
 }
 
 }

@@ -25,7 +25,7 @@
 #include <QComboBox>
 #include <QWidget>
 
-#include "common/define.h"
+#include "olive/common/define.h"
 #include "codec/exportformat.h"
 #include "widget/slider/integerslider.h"
 #include "widget/standardcombos/standardcombos.h"

@@ -27,7 +27,7 @@
 
 #include "config/config.h"
 #include "core.h"
-#include "ui/icons/icons.h"
+#include "olive/common/icons.h"
 
 namespace olive
 {

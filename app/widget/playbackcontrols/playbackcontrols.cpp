@@ -27,7 +27,7 @@
 
 #include "core.h"
 #include "config/config.h"
-#include "ui/icons/icons.h"
+#include "olive/common/icons.h"
 
 namespace olive
 {
@@ -57,7 +57,7 @@ PlaybackControls::PlaybackControls(QWidget *parent)
 	lower_left_layout->setContentsMargins(0, 0, 0, 0);
 
 	cur_tc_lbl_ = new RationalSlider();
-	cur_tc_lbl_->SetDisplayType(RationalSlider::kTime);
+	cur_tc_lbl_->SetDisplayType(kRationalTime);
 	cur_tc_lbl_->SetMinimum(0);
 	connect(cur_tc_lbl_, &RationalSlider::ValueChanged, this,
 			&PlaybackControls::TimeChanged);

@@ -26,7 +26,7 @@
 #include <QDebug>
 
 #include "node/factory.h"
-#include "ui/icons/icons.h"
+#include "olive/common/icons.h"
 #include "widget/menu/menu.h"
 
 namespace olive

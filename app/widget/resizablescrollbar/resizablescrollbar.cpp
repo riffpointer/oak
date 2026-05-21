@@ -26,7 +26,7 @@
 #include <QStyle>
 #include <QStyleOptionSlider>
 
-#include "common/range.h"
+#include "olive/common/range.h"
 
 namespace olive
 {

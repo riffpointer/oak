@@ -21,7 +21,7 @@
 
 #include "collapsebutton.h"
 
-#include "ui/icons/icons.h"
+#include "olive/common/icons.h"
 
 namespace olive
 {

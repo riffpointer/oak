@@ -21,7 +21,7 @@
 
 #include "numericsliderbase.h"
 
-#include "common/qtutils.h"
+#include "olive/common/qtutils.h"
 #include "config/config.h"
 #include "core.h"
 

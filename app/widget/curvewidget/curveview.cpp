@@ -28,8 +28,8 @@
 #include <QScrollBar>
 #include <QtMath>
 
-#include "common/decibel.h"
-#include "common/qtutils.h"
+#include "olive/common/decibel.h"
+#include "olive/common/qtutils.h"
 #include "node/nodeundo.h"
 #include "widget/keyframeview/keyframeviewundo.h"
 
@@ -664,7 +664,7 @@ CurveView::GetFloatDisplayTypeFromKeyframe(NodeKeyframe *key)
 	}
 
 	// Fallback to normal
-	return FloatSlider::kNormal;
+	return kFloatNormal;
 }
 
 double CurveView::GetOffsetFromKeyframe(NodeKeyframe *key)

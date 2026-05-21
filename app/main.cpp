@@ -42,8 +42,8 @@ extern "C" {
 #include <QSurfaceFormat>
 
 #include "core.h"
-#include "common/commandlineparser.h"
-#include "common/debug.h"
+#include "olive/common/commandlineparser.h"
+#include "olive/common/debug.h"
 #include "node/project/serializer/serializer.h"
 #include "version.h"
 
@@ -55,7 +55,7 @@ extern "C" {
 #endif
 
 #ifdef USE_CRASHPAD
-#include "common/crashpadinterface.h"
+#include "olive/common/crashpadinterface.h"
 #endif // USE_CRASHPAD
 int decompress_project(const QString &project)
 {

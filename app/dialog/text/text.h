@@ -26,7 +26,7 @@
 #include <QFontComboBox>
 #include <QPlainTextEdit>
 
-#include "common/define.h"
+#include "olive/common/define.h"
 #include "widget/slider/floatslider.h"
 
 namespace olive

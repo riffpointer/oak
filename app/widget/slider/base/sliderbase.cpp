@@ -25,7 +25,7 @@
 #include <QEvent>
 #include <QMessageBox>
 
-#include "common/qtutils.h"
+#include "olive/common/qtutils.h"
 #include "core.h"
 #include "window/mainwindow/mainwindow.h"
 

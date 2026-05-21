@@ -23,7 +23,7 @@
 
 #include <QHBoxLayout>
 
-#include "common/qtutils.h"
+#include "olive/common/qtutils.h"
 #include "core.h"
 #include "node/node.h"
 #include "node/nodeundo.h"

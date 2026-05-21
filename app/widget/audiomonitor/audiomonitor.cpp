@@ -26,8 +26,8 @@
 #include <QPainter>
 
 #include "audio/audiomanager.h"
-#include "common/decibel.h"
-#include "common/qtutils.h"
+#include "olive/common/decibel.h"
+#include "olive/common/qtutils.h"
 
 namespace olive
 {

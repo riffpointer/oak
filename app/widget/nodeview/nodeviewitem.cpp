@@ -27,7 +27,7 @@
 #include <QPainter>
 #include <QStyleOptionGraphicsItem>
 
-#include "common/qtutils.h"
+#include "olive/common/qtutils.h"
 #include "config/config.h"
 #include "core.h"
 #include "node/nodeundo.h"
@@ -36,7 +36,7 @@
 #include "nodeview.h"
 #include "nodeviewscene.h"
 #include "ui/colorcoding.h"
-#include "ui/icons/icons.h"
+#include "olive/common/icons.h"
 #include "window/mainwindow/mainwindow.h"
 
 namespace olive

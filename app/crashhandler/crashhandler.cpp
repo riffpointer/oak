@@ -37,8 +37,8 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
-#include "common/crashpadutils.h"
-#include "common/filefunctions.h"
+#include "olive/common/crashpadutils.h"
+#include "olive/common/filefunctions.h"
 #include "version.h"
 
 namespace olive

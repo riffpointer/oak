@@ -26,7 +26,7 @@
 
 #include "core.h"
 #include "node/nodeundo.h"
-#include "ui/icons/icons.h"
+#include "olive/common/icons.h"
 
 namespace olive
 {

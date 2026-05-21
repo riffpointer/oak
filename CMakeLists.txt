@@ -121,7 +121,7 @@ list(APPEND OLIVE_INCLUDE_DIRS ${OPENEXR_INCLUDES})
 
 # Link Olive
 list(APPEND OLIVE_LIBRARIES olivecore)
-list(APPEND OLIVE_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/ext/core/include)
+list(APPEND OLIVE_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/shared/include)
 
 
 # Link Qt
@@ -280,6 +280,8 @@ endif()
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 list(APPEND OLIVE_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/ext)
 
+add_subdirectory(shared)
+add_subdirectory(engine)
 add_subdirectory(ext)
 add_subdirectory(third_party/openfx/HostSupport)
 add_subdirectory(app)

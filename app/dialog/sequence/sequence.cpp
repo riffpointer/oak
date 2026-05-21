@@ -32,7 +32,7 @@
 
 #include "config/config.h"
 #include "core.h"
-#include "common/qtutils.h"
+#include "olive/common/qtutils.h"
 #include "undo/undostack.h"
 
 namespace olive

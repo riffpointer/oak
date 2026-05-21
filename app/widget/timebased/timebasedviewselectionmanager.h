@@ -27,7 +27,7 @@
 #include <QRubberBand>
 #include <QToolTip>
 
-#include "common/qtutils.h"
+#include "olive/common/qtutils.h"
 #include "timebasedview.h"
 #include "timebasedwidget.h"
 #include "widget/timetarget/timetarget.h"

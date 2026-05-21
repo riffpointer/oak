@@ -31,8 +31,8 @@
 #include <QXmlStreamWriter>
 
 #include "config/config.h"
-#include "render/videoparams.h"
-#include "ui/icons/icons.h"
+#include "olive/render/videoparams.h"
+#include "olive/common/icons.h"
 #include "widget/menu/menu.h"
 
 namespace olive

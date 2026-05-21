@@ -24,7 +24,7 @@
 #include <QDateTime>
 #include <QVBoxLayout>
 
-#include "ui/icons/icons.h"
+#include "olive/common/icons.h"
 
 namespace olive
 {

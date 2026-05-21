@@ -24,7 +24,7 @@
 #include <QDebug>
 #include <QPainter>
 
-#include "common/qtutils.h"
+#include "olive/common/qtutils.h"
 #include "config/config.h"
 #include "core.h"
 #include "widget/menu/menu.h"

@@ -19,7 +19,7 @@
 
 ***/
 
-#include "colorcoding.h"
+#include "olive/common/colorcoding.h"
 
 namespace olive
 {

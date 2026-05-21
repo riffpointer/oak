@@ -35,9 +35,9 @@
 #include <QScreen>
 #include <QTextEdit>
 
-#include "common/define.h"
-#include "common/html.h"
-#include "common/qtutils.h"
+#include "olive/common/define.h"
+#include "olive/common/html.h"
+#include "olive/common/qtutils.h"
 #include "config/config.h"
 #include "core.h"
 #include "node/block/subtitle/subtitle.h"

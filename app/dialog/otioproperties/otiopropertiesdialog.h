@@ -23,7 +23,7 @@
 #include <QDialog>
 #include <QTreeWidget>
 
-#include "common/define.h"
+#include "olive/common/define.h"
 #include "opentimelineio/timeline.h"
 #include "node/project/sequence/sequence.h"
 #include "node/project.h"

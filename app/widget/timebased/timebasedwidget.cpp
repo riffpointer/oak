@@ -23,11 +23,11 @@
 
 #include <QInputDialog>
 
-#include "common/autoscroll.h"
-#include "common/range.h"
+#include "olive/common/autoscroll.h"
+#include "olive/common/range.h"
 #include "config/config.h"
 #include "core.h"
-#include "common/Current.h"
+#include "olive/common/Current.h"
 #include "dialog/markerproperties/markerpropertiesdialog.h"
 #include "node/project/sequence/sequence.h"
 #include "timeline/timelineundoworkarea.h"

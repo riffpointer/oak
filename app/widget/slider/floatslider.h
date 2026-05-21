@@ -24,6 +24,8 @@
 
 #include "base/decimalsliderbase.h"
 
+#include "olive/common/paramdisplay.h"
+
 namespace olive
 {
 
@@ -32,7 +34,7 @@ class FloatSlider : public DecimalSliderBase {
 public:
 	FloatSlider(QWidget *parent = nullptr);
 
-	enum DisplayType { kNormal, kDecibel, kPercentage };
+	using DisplayType = FloatDisplayType;
 
 	double GetValue() const;
 
@@ -46,11 +48,11 @@ public:
 
 	void SetDisplayType(const DisplayType &type);
 
-	static double TransformValueToDisplay(double val, DisplayType display);
+	static double TransformValueToDisplay(double val, FloatDisplayType display);
 
-	static double TransformDisplayToValue(double val, DisplayType display);
+	static double TransformDisplayToValue(double val, FloatDisplayType display);
 
-	static QString ValueToString(double val, DisplayType display,
+	static QString ValueToString(double val, FloatDisplayType display,
 								 int decimal_places,
 								 bool autotrim_decimal_places);
 
@@ -69,7 +71,7 @@ signals:
 	void ValueChanged(double);
 
 private:
-	DisplayType display_type_;
+	FloatDisplayType display_type_;
 };
 
 }

@@ -25,7 +25,7 @@
 #include <QObject>
 #include <QTimer>
 
-#include "common/define.h"
+#include "olive/common/define.h"
 
 namespace olive
 {

@@ -25,7 +25,7 @@
 #include <QToolTip>
 #include <QVBoxLayout>
 
-#include "common/qtutils.h"
+#include "olive/common/qtutils.h"
 #include "dialog/keyframeproperties/keyframeproperties.h"
 #include "keyframeviewundo.h"
 #include "node/group/group.h"

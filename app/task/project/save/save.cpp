@@ -25,7 +25,7 @@
 #include <QFile>
 #include <QXmlStreamWriter>
 
-#include "common/filefunctions.h"
+#include "olive/common/filefunctions.h"
 #include "core.h"
 #include "node/project/serializer/serializer.h"
 
@@ -49,7 +49,6 @@ bool ProjectSaveTask::Run()
 
 	data.SetFilename(using_filename);
 	data.SetProject(project_);
-	data.SetLayout(layout_);
 
 	ProjectSerializer::Result result =
 		ProjectSerializer::Save(data, use_compression_);

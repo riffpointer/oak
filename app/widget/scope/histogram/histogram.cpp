@@ -25,7 +25,7 @@
 #include <QtMath>
 #include <QVector2D>
 
-#include "common/qtutils.h"
+#include "olive/common/qtutils.h"
 #include "node/node.h"
 
 namespace olive

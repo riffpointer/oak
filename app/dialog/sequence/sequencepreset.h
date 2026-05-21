@@ -25,9 +25,9 @@
 #include <olive/core/core.h>
 #include <QXmlStreamWriter>
 
-#include "common/xmlutils.h"
+#include "olive/common/xmlutils.h"
 #include "dialog/sequence/presetmanager.h"
-#include "render/videoparams.h"
+#include "olive/render/videoparams.h"
 
 namespace olive
 {

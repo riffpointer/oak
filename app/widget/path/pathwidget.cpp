@@ -25,7 +25,7 @@
 #include <QFileDialog>
 #include <QHBoxLayout>
 
-#include "common/filefunctions.h"
+#include "olive/common/filefunctions.h"
 
 namespace olive
 {

@@ -28,7 +28,7 @@
 #include <kddockwidgets/DockWidget.h>
 #include <QEvent>
 
-#include "common/define.h"
+#include "olive/common/define.h"
 
 #include <QTabWidget>
 

@@ -27,7 +27,7 @@
 #include <QtMath>
 
 #include "core.h"
-#include "common/range.h"
+#include "olive/common/range.h"
 #include "dialog/sequence/sequence.h"
 #include "dialog/speedduration/speeddurationdialog.h"
 #include "node/block/transition/transition.h"
@@ -80,7 +80,7 @@ TimelineWidget::TimelineWidget(QWidget *parent)
 
 	timecode_label_ = new RationalSlider();
 	timecode_label_->SetAlignment(Qt::AlignCenter);
-	timecode_label_->SetDisplayType(RationalSlider::kTime);
+	timecode_label_->SetDisplayType(kRationalTime);
 	timecode_label_->setVisible(false);
 	timecode_label_->SetMinimum(0);
 	ruler_and_time_layout->addWidget(timecode_label_);

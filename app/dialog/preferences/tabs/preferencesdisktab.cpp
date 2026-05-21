@@ -28,7 +28,7 @@
 #include <QLabel>
 #include <QMessageBox>
 
-#include "common/filefunctions.h"
+#include "olive/common/filefunctions.h"
 
 namespace olive
 {

@@ -30,8 +30,8 @@
 #include <QTextBlock>
 #include <QtMath>
 
-#include "common/qtutils.h"
-#include "ui/icons/icons.h"
+#include "olive/common/qtutils.h"
+#include "olive/common/icons.h"
 
 namespace olive
 {

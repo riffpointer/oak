@@ -24,7 +24,7 @@
 #include <cmath>
 #include <QDebug>
 
-#include "common/decibel.h"
+#include "olive/common/decibel.h"
 
 namespace olive
 {
@@ -33,7 +33,7 @@ namespace olive
 
 FloatSlider::FloatSlider(QWidget *parent)
 	: super(parent)
-	, display_type_(kNormal)
+	, display_type_(kFloatNormal)
 {
 	SetValue(0.0);
 }
@@ -68,13 +68,13 @@ void FloatSlider::SetDisplayType(const FloatSlider::DisplayType &type)
 	display_type_ = type;
 
 	switch (display_type_) {
-	case kNormal:
+	case kFloatNormal:
 		ClearFormat();
 		break;
-	case kDecibel:
+	case kFloatDecibel:
 		SetFormat(tr("%1 dB"));
 		break;
-	case kPercentage:
+	case kFloatPercentage:
 		SetFormat(tr("%1%"));
 		break;
 	}
@@ -83,12 +83,12 @@ void FloatSlider::SetDisplayType(const FloatSlider::DisplayType &type)
 double FloatSlider::TransformValueToDisplay(double val, DisplayType display)
 {
 	switch (display) {
-	case kNormal:
+	case kFloatNormal:
 		break;
-	case kDecibel:
+	case kFloatDecibel:
 		val = Decibel::fromLinear(val);
 		break;
-	case kPercentage:
+	case kFloatPercentage:
 		val *= 100.0;
 		break;
 	}
@@ -99,12 +99,12 @@ double FloatSlider::TransformValueToDisplay(double val, DisplayType display)
 double FloatSlider::TransformDisplayToValue(double val, DisplayType display)
 {
 	switch (display) {
-	case kNormal:
+	case kFloatNormal:
 		break;
-	case kDecibel:
+	case kFloatDecibel:
 		val = Decibel::toLinear(val);
 		break;
-	case kPercentage:
+	case kFloatPercentage:
 		val *= 0.01;
 		break;
 	}
@@ -117,7 +117,7 @@ QString FloatSlider::ValueToString(double val, FloatSlider::DisplayType display,
 								   bool autotrim_decimal_places)
 {
 	// Return negative infinity for zero volume
-	if (display == kDecibel && qIsNull(val)) {
+	if (display == kFloatDecibel && qIsNull(val)) {
 		return tr("\xE2\x88\x9E");
 	}
 
@@ -154,17 +154,17 @@ QVariant FloatSlider::AdjustDragDistanceInternal(const QVariant &start,
 												 const double &drag) const
 {
 	switch (display_type_) {
-	case kNormal:
+	case kFloatNormal:
 		// No change here
 		break;
-	case kDecibel: {
+	case kFloatDecibel: {
 		double current_db = Decibel::fromLinear(start.toDouble());
 		current_db += drag;
 		double adjusted_linear = Decibel::toLinear(current_db);
 
 		return adjusted_linear;
 	}
-	case kPercentage:
+	case kFloatPercentage:
 		return super::AdjustDragDistanceInternal(start, drag * 0.01);
 	}
 

@@ -24,7 +24,7 @@
 
 #include <QComboBox>
 
-#include "render/videoparams.h"
+#include "olive/render/videoparams.h"
 
 namespace olive
 {

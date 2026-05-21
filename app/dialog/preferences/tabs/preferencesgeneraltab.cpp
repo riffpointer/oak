@@ -26,7 +26,7 @@
 #include <QLabel>
 #include <QPushButton>
 
-#include "common/autoscroll.h"
+#include "olive/common/autoscroll.h"
 #include "core.h"
 
 namespace olive

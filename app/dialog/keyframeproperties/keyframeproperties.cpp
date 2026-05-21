@@ -47,7 +47,7 @@ KeyframePropertiesDialog::KeyframePropertiesDialog(
 	layout->addWidget(new QLabel("Time:"), row, 0);
 
 	time_slider_ = new RationalSlider();
-	time_slider_->SetDisplayType(RationalSlider::kTime);
+	time_slider_->SetDisplayType(kRationalTime);
 	time_slider_->SetTimebase(timebase_);
 	layout->addWidget(time_slider_, row, 1);
 

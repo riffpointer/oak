@@ -24,7 +24,7 @@
 
 #include <QWidget>
 
-#include "common/define.h"
+#include "olive/common/define.h"
 #include "undo/undocommand.h"
 
 namespace olive

@@ -39,7 +39,7 @@ RationalSlider::RationalSlider(QWidget *parent)
 	connect(SliderBase::label(), &SliderLabel::customContextMenuRequested, this,
 			&RationalSlider::ShowDisplayTypeMenu);
 
-	SetDisplayType(kFloat);
+	SetDisplayType(kRationalFloat);
 
 	SetValue(rational(0, 0));
 }
@@ -109,13 +109,13 @@ QString RationalSlider::ValueToString(const QVariant &v) const
 		double val = r.toDouble() + GetOffset().value<rational>().toDouble();
 
 		switch (display_type_) {
-		case kTime:
+		case kRationalTime:
 			return QString::fromStdString(Timecode::time_to_timecode(
 				r, timebase_, Core::instance()->GetTimecodeDisplay()));
-		case kFloat:
+		case kRationalFloat:
 			return FloatToString(val, GetDecimalPlaces(),
 								 GetAutoTrimDecimalPlaces());
-		case kRational:
+		case kRationalRational:
 			return QString::fromStdString(v.value<rational>().toString());
 		}
 
@@ -129,13 +129,13 @@ QVariant RationalSlider::StringToValue(const QString &s, bool *ok) const
 	*ok = false;
 
 	switch (display_type_) {
-	case kTime: {
+	case kRationalTime: {
 		r = Timecode::timecode_to_time(s.toStdString(), timebase_,
 									   Core::instance()->GetTimecodeDisplay(),
 									   ok);
 		break;
 	}
-	case kFloat: {
+	case kRationalFloat: {
 		// First, convert to a double
 		double d = s.toDouble(ok);
 		if (!(*ok)) {
@@ -146,7 +146,7 @@ QVariant RationalSlider::StringToValue(const QString &s, bool *ok) const
 		r = rational::fromDouble(d, ok);
 		break;
 	}
-	case kRational:
+	case kRationalRational:
 		r = rational::fromString(s.toStdString(), ok);
 		break;
 	}
@@ -185,29 +185,29 @@ void RationalSlider::ShowDisplayTypeMenu()
 	Menu m(this);
 
 	if (!GetLockDisplayType()) {
-		if (!disabled_.contains(kFloat)) {
+		if (!disabled_.contains(kRationalFloat)) {
 			QAction *float_action = m.addAction(tr("Float"));
-			float_action->setData(kFloat);
+			float_action->setData(kRationalFloat);
 			connect(float_action, &QAction::triggered, this,
 					&RationalSlider::SetDisplayTypeFromMenu);
 		}
 
-		if (!disabled_.contains(kRational)) {
+		if (!disabled_.contains(kRationalRational)) {
 			QAction *rational_action = m.addAction(tr("Rational"));
-			rational_action->setData(kRational);
+			rational_action->setData(kRationalRational);
 			connect(rational_action, &QAction::triggered, this,
 					&RationalSlider::SetDisplayTypeFromMenu);
 		}
 
-		if (!disabled_.contains(kTime)) {
+		if (!disabled_.contains(kRationalTime)) {
 			QAction *time_action = m.addAction(tr("Time"));
-			time_action->setData(kTime);
+			time_action->setData(kRationalTime);
 			connect(time_action, &QAction::triggered, this,
 					&RationalSlider::SetDisplayTypeFromMenu);
 		}
 	}
 
-	if (display_type_ == kTime) {
+	if (display_type_ == kRationalTime) {
 		if (!m.actions().isEmpty()) {
 			m.addSeparator();
 		}

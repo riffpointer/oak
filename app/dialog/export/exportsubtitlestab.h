@@ -27,7 +27,7 @@
 #include <QLabel>
 
 #include "codec/exportformat.h"
-#include "common/qtutils.h"
+#include "olive/common/qtutils.h"
 #include "dialog/export/exportformatcombobox.h"
 
 namespace olive

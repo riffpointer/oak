@@ -29,7 +29,7 @@
 #include <QPen>
 
 #include "config/config.h"
-#include "common/qtutils.h"
+#include "olive/common/qtutils.h"
 #include "node/project/footage/footage.h"
 #include "panel/panelmanager.h"
 #include "panel/timeline/timeline.h"

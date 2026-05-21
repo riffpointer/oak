@@ -37,7 +37,7 @@
 #include "node/project/serializer/serializer.h"
 #include "panel/panelmanager.h"
 #include "node/traverser.h"
-#include "ui/icons/icons.h"
+#include "olive/common/icons.h"
 #include "widget/menu/menushared.h"
 #include "widget/timebased/timebasedview.h"
 

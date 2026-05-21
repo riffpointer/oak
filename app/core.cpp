@@ -39,8 +39,8 @@
 #include "audio/audiomanager.h"
 #include "cli/clitask/clitaskdialog.h"
 #include "codec/conformmanager.h"
-#include "common/filefunctions.h"
-#include "common/xmlutils.h"
+#include "olive/common/filefunctions.h"
+#include "olive/common/xmlutils.h"
 #include "config/config.h"
 #include "dialog/about/about.h"
 #include "dialog/autorecovery/autorecoverydialog.h"
@@ -957,9 +957,6 @@ void Core::SaveProjectInternal(const QString &override_filename)
 		bool use_compression = !open_project_->filename().endsWith(
 			QStringLiteral(".ovexml"), Qt::CaseInsensitive);
 		psm = new ProjectSaveTask(open_project_, use_compression);
-		static_cast<ProjectSaveTask *>(psm)->SetLayout(
-			main_window_->SaveLayout());
-
 		if (!override_filename.isEmpty()) {
 			// Set override filename if provided
 			static_cast<ProjectSaveTask *>(psm)->SetOverrideFilename(

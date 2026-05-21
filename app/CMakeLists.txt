@@ -21,25 +21,16 @@ set(OLIVE_SOURCES
   core.cpp
 )
 
-#set(OLIVE_RESOURCES)
-
 # Add subdirectories, which will populate the above variables
-add_subdirectory(audio)
 add_subdirectory(cli)
-add_subdirectory(codec)
-add_subdirectory(config)
 add_subdirectory(dialog)
-add_subdirectory(node)
 add_subdirectory(packaging)
 add_subdirectory(panel)
-add_subdirectory(render)
 add_subdirectory(shaders)
 add_subdirectory(task)
-add_subdirectory(timeline)
 add_subdirectory(ts)
 add_subdirectory(tool)
 add_subdirectory(ui)
-add_subdirectory(undo)
 add_subdirectory(widget)
 add_subdirectory(window)
 
@@ -56,10 +47,6 @@ configure_file(ts/translations.qrc.in ts/translations.qrc @ONLY)
 set(OLIVE_RESOURCES
   ${OLIVE_RESOURCES}
   ${CMAKE_CURRENT_BINARY_DIR}/ts/translations.qrc
-        render/job/pluginjob.cpp
-        render/job/pluginjob.h
-        widget/nodeparamview/nodeparambutton.cpp
-        widget/nodeparamview/nodeparambutton.h
 )
 
 # Add version object
@@ -78,8 +65,6 @@ add_library(libolive-editor
   ${OLIVE_RESOURCES}
 )
 add_subdirectory(common)
-add_subdirectory(pluginSupport)
-
 
 target_compile_features(libolive-editor PUBLIC cxx_std_23)
 include_directories(../third_party/openfx/include
@@ -93,8 +78,6 @@ add_executable(olive-editor
   $<TARGET_OBJECTS:libolive-editor>
   $<TARGET_OBJECTS:olive-version-obj>
 )
-target_include_directories(olive-editor PUBLIC pluginSupport)
-target_link_libraries(olive-editor PUBLIC OfxHost)
 # Create docs if doxygen was found
 if(DOXYGEN_FOUND)
   set(DOXYGEN_PROJECT_NAME "Oak Video Editor")
@@ -137,8 +120,8 @@ elseif(UNIX)
 endif()
 
 # Set link libraries
-target_link_libraries(olive-editor PRIVATE ${OLIVE_LIBRARIES})
-target_link_libraries(libolive-editor PRIVATE ${OLIVE_LIBRARIES})
+target_link_libraries(olive-editor PRIVATE ${OLIVE_LIBRARIES} oliveengine)
+target_link_libraries(libolive-editor PRIVATE ${OLIVE_LIBRARIES} oliveengine)
 
 # Set compile options
 target_compile_options(olive-editor PRIVATE ${OLIVE_COMPILE_OPTIONS})
