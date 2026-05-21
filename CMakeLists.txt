@@ -77,6 +77,12 @@ else()
   endif()
 endif()
 
+# MinGW does not define WIN32/WINDOWS the way OpenFX HostSupport expects.
+# Ensure these are visible so ofxhBinary.h et al. pick the Windows code path.
+if(MINGW)
+  add_compile_definitions(WIN32 WINDOWS)
+endif()
+
 set(OLIVE_DEFINITIONS -DQT_DEPRECATED_WARNINGS)
 if (WIN32)
   list(APPEND OLIVE_DEFINITIONS -DUNICODE -D_UNICODE)

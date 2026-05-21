@@ -27,7 +27,6 @@
 #include "render/loopmode.h"
 #include "render/videoparams.h"
 #include <cstdint>
-#include <qtypes.h>
 #include <string>
 #include <vector>
 namespace olive
