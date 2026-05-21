@@ -7,7 +7,7 @@ This document describes how to build Oak Video Editor from source on Windows, Li
 - CMake 3.20+
 - Ninja (recommended)
 - Qt 6 (with private headers)
-- FFmpeg development libraries
+- FFmpeg 8.0+ development libraries (distro packages on Ubuntu/Debian are often too old; see the Linux section below)
 - OpenImageIO
 - OpenColorIO (2.x)
 - OpenEXR
@@ -20,31 +20,32 @@ This document describes how to build Oak Video Editor from source on Windows, Li
 
 ## Windows (MSYS2)
 
-This guide uses [MSYS2](https://www.msys2.org/) with the MinGW-w64 toolchain.
+This guide uses [MSYS2](https://www.msys2.org/) with the UCRT64 toolchain.
 
 ### 1. Install MSYS2
 
-Download and install MSYS2 from [https://www.msys2.org/](https://www.msys2.org/). Then open the **MSYS2 MinGW 64-bit** terminal.
+Download and install MSYS2 from [https://www.msys2.org/](https://www.msys2.org/). Then open the **MSYS2 UCRT64** terminal.
 
 ### 2. Install Dependencies
 
 ```bash
 pacman -Syu
 pacman -S --needed \
-  mingw-w64-x86_64-cmake \
-  mingw-w64-x86_64-ninja \
-  mingw-w64-x86_64-qt6-base \
-  mingw-w64-x86_64-qt6-tools \
-  mingw-w64-x86_64-ffmpeg \
-  mingw-w64-x86_64-openimageio \
-  mingw-w64-x86_64-opencolorio \
-  mingw-w64-x86_64-openexr \
-  mingw-w64-x86_64-expat \
-  mingw-w64-x86_64-portaudio \
-  mingw-w64-x86_64-gcc
+  mingw-w64-ucrt-x86_64-cmake \
+  mingw-w64-ucrt-x86_64-ninja \
+  mingw-w64-ucrt-x86_64-qt6-base \
+  mingw-w64-ucrt-x86_64-qt6-tools \
+  mingw-w64-ucrt-x86_64-ffmpeg \
+  mingw-w64-ucrt-x86_64-openimageio \
+  mingw-w64-ucrt-x86_64-opencolorio \
+  mingw-w64-ucrt-x86_64-openexr \
+  mingw-w64-ucrt-x86_64-fmt \
+  mingw-w64-ucrt-x86_64-expat \
+  mingw-w64-ucrt-x86_64-portaudio \
+  mingw-w64-ucrt-x86_64-gcc
 ```
 
-> **Note:** Qt 6 private headers may require additional packages depending on the MSYS2 repository state. If CMake reports missing private headers, install `mingw-w64-x86_64-qt6-base-private` if available.
+> **Note:** Qt 6 private headers may require additional packages depending on the MSYS2 repository state. If CMake reports missing private headers, install `mingw-w64-ucrt-x86_64-qt6-base-private` if available.
 
 ### 3. Clone and Build
 
@@ -74,22 +75,44 @@ ctest --test-dir build --output-on-failure -C Release
 
 ### Debian / Ubuntu
 
-Install dependencies:
+Install dependencies (FFmpeg is built from source below because distro packages are often too old):
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y \
-  cmake ninja-build pkg-config \
+  cmake ninja-build pkg-config nasm \
   qt6-base-dev qt6-base-dev-tools qt6-base-private-dev qt6-tools-dev qt6-tools-dev-tools \
-  libavcodec-dev libavformat-dev libavfilter-dev libavutil-dev libswscale-dev libswresample-dev \
   libopencolorio-dev libopenimageio-dev libopenexr-dev libexpat1-dev \
   portaudio19-dev libgl1-mesa-dev libxkbcommon-dev
+```
+
+Build FFmpeg 8.0+ from source:
+
+```bash
+git clone --branch n8.1.1 --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg-src
+cd ffmpeg-src
+./configure \
+  --prefix="$PWD/../ffmpeg-install" \
+  --enable-static \
+  --disable-shared \
+  --disable-doc \
+  --disable-programs \
+  --disable-avdevice \
+  --disable-network \
+  --enable-pic \
+  --enable-gpl \
+  --enable-version3
+make -j$(nproc)
+make install
+cd ..
 ```
 
 Configure and build:
 
 ```bash
-cmake -S . -B build -G Ninja -DBUILD_TESTS=ON -DBUILD_QT6=ON
+cmake -S . -B build -G Ninja \
+  -DBUILD_TESTS=ON -DBUILD_QT6=ON \
+  -DFFMPEG_ROOT="$PWD/ffmpeg-install"
 cmake --build build --config Release
 ```
 
@@ -239,7 +262,7 @@ export PATH="/path/to/qt6/bin:$PATH"
 export CMAKE_PREFIX_PATH="/path/to/qt6"
 
 # Windows (MSYS2)
-export PATH="/mingw64/bin:$PATH"
+export PATH="/ucrt64/bin:$PATH"
 ```
 
 ### Missing Private Headers
@@ -253,3 +276,28 @@ Make sure FFmpeg development libraries are installed and `pkg-config` can locate
 ```bash
 pkg-config --exists libavcodec && echo "Found" || echo "Not found"
 ```
+
+### FFmpeg Version Too Old
+
+If you encounter errors like `AV_PIX_FMT_GRAYF16 was not declared in this scope`, your FFmpeg is too old (Oak requires 8.0+). Build from source:
+
+```bash
+git clone --branch n8.1.1 --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg-src
+cd ffmpeg-src
+./configure \
+  --prefix="$PWD/../ffmpeg-install" \
+  --enable-static \
+  --disable-shared \
+  --disable-doc \
+  --disable-programs \
+  --disable-avdevice \
+  --disable-network \
+  --enable-pic \
+  --enable-gpl \
+  --enable-version3
+make -j$(nproc)
+make install
+cd ..
+```
+
+Then pass `-DFFMPEG_ROOT="$PWD/ffmpeg-install"` to CMake.
