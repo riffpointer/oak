@@ -33,7 +33,6 @@
 #include <cstdint>
 #include <cstring>
 #include <mutex>
-#include <qtypes.h>
 #include <string>
 #include <vector>
 #include <QDebug>
