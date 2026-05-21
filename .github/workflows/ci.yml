@@ -10,16 +10,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-2022]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     env:
       CMAKE_BUILD_TYPE: Release
-      RUN_OFX_ITEST: "0"
-      # Enable plugin smoke tests
+      # Enable OFX integration tests that require external plugin bundles
+      RUN_OFX_ITEST: "1"
+      # Enable plugin subsystem smoke tests
       OAK_PLUGIN_SMOKE_TEST: "1"
+
     steps:
       - uses: actions/checkout@v4
-        with: 
+        with:
           submodules: 'true'
+
+      # ------------------------------------------------------------------
+      # Linux dependencies
+      # ------------------------------------------------------------------
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -31,6 +37,9 @@ jobs:
             libopencolorio-dev libopenimageio-dev libopenexr-dev libexpat1-dev \
             portaudio19-dev libgl1-mesa-dev libxkbcommon-dev
 
+      # ------------------------------------------------------------------
+      # macOS dependencies
+      # ------------------------------------------------------------------
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -52,28 +61,31 @@ jobs:
           cmake --install OpenTimelineIO/build
           echo "OTIO_LOCATION=${PWD}/otio-install" >> "$GITHUB_ENV"
 
-      - name: Install Qt (Windows)
+      # ------------------------------------------------------------------
+      # Windows dependencies (MSYS2)
+      # ------------------------------------------------------------------
+      - name: Setup MSYS2
         if: runner.os == 'Windows'
-        uses: jurplel/install-qt-action@v4
+        uses: msys2/setup-msys2@v2
         with:
-          version: 6.5.3
-          cache: true
-          tools: 'tools_ninja'
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-qt6-base
+            mingw-w64-x86_64-qt6-tools
+            mingw-w64-x86_64-ffmpeg
+            mingw-w64-x86_64-openimageio
+            mingw-w64-x86_64-opencolorio
+            mingw-w64-x86_64-openexr
+            mingw-w64-x86_64-expat
+            mingw-w64-x86_64-portaudio
 
-      - name: Install dependencies (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          choco install -y ninja
-          $env:VCPKG_ROOT = "C:\vcpkg"
-          & "$env:VCPKG_ROOT\vcpkg.exe" install ffmpeg openimageio opencolorio openexr expat portaudio --triplet x64-windows
-          echo "VCPKG_ROOT=$env:VCPKG_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "CMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-      - name: Setup MSVC (Windows)
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
-
+      # ------------------------------------------------------------------
+      # Configure
+      # ------------------------------------------------------------------
       - name: Configure (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -95,132 +107,138 @@ jobs:
 
       - name: Configure (Windows)
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: msys2 {0}
         run: |
-          $toolchain = "$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
-          $ninja = "$env:ChocolateyInstall\bin\ninja.exe"
-          cmake -S . -B build -G Ninja `
-            -DBUILD_TESTS=ON `
-            -DBUILD_QT6=ON `
-            -DCMAKE_BUILD_TYPE=$env:CMAKE_BUILD_TYPE `
-            -DCMAKE_TOOLCHAIN_FILE=$toolchain `
-            -DCMAKE_MAKE_PROGRAM=$ninja `
-            -DCMAKE_PREFIX_PATH=$env:Qt6_DIR
+          cmake -S . -B build -G Ninja \
+            -DBUILD_TESTS=ON \
+            -DBUILD_QT6=ON \
+            -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
 
+      # ------------------------------------------------------------------
+      # Build Oak
+      # ------------------------------------------------------------------
       - name: Build
+        if: runner.os != 'Windows'
         run: cmake --build build --config ${{ env.CMAKE_BUILD_TYPE }}
 
-      - name: Build OpenFX misc plugins (Linux, optional)
-        if: runner.os == 'Linux' && env.RUN_OFX_ITEST == '1'
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: cmake --build build --config ${{ env.CMAKE_BUILD_TYPE }}
+
+      # ------------------------------------------------------------------
+      # Clone and build OpenFX-Misc plugins (used by OFX integration tests)
+      # ------------------------------------------------------------------
+      - name: Clone OpenFX-Misc
+        run: git clone --recursive --depth 1 https://github.com/NatronGitHub/openfx-misc.git
+
+      - name: Build OpenFX-Misc plugins (Linux / macOS)
+        if: runner.os != 'Windows'
         run: |
-          git clone --depth 1 https://github.com/NatronGitHub/openfx-misc.git
           cmake -S openfx-misc -B openfx-misc/build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build openfx-misc/build
+
+      - name: Build OpenFX-Misc plugins (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          cmake -S openfx-misc -B openfx-misc/build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build openfx-misc/build
+
+      - name: Export OFX test environment
+        if: runner.os != 'Windows'
+        run: |
           echo "OAK_OFX_ITEST=1" >> "$GITHUB_ENV"
           echo "OAK_OFX_PLUGIN_PATH=${PWD}/openfx-misc/build" >> "$GITHUB_ENV"
           echo "OAK_OFX_PLUGIN_ID=net.sf.openfx.ChromaKeyerPlugin" >> "$GITHUB_ENV"
 
-      - name: Build OpenFX misc plugins (macOS, optional)
-        if: runner.os == 'macOS' && env.RUN_OFX_ITEST == '1'
-        run: |
-          git clone --depth 1 https://github.com/NatronGitHub/openfx-misc.git
-          cmake -S openfx-misc -B openfx-misc/build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release
-          cmake --build openfx-misc/build
-          echo "OAK_OFX_ITEST=1" >> "$GITHUB_ENV"
-          echo "OAK_OFX_PLUGIN_PATH=${PWD}/openfx-misc/build" >> "$GITHUB_ENV"
-          echo "OAK_OFX_PLUGIN_ID=net.sf.openfx.ChromaKeyerPlugin" >> "$GITHUB_ENV"
-
-      - name: Build OpenFX misc plugins (Windows, optional)
-        if: runner.os == 'Windows' && env.RUN_OFX_ITEST == '1'
+      - name: Export OFX test environment (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          git clone --depth 1 https://github.com/NatronGitHub/openfx-misc.git
-          cmake -S openfx-misc -B openfx-misc/build -G Ninja `
-            -DCMAKE_BUILD_TYPE=Release
-          cmake --build openfx-misc/build
           "OAK_OFX_ITEST=1" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "OAK_OFX_PLUGIN_PATH=$env:GITHUB_WORKSPACE\\openfx-misc\\build" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "OAK_OFX_PLUGIN_PATH=$env:GITHUB_WORKSPACE\openfx-misc\build" | Out-File -FilePath $env:GITHUB_ENV -Append
           "OAK_OFX_PLUGIN_ID=net.sf.openfx.ChromaKeyerPlugin" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+      # ------------------------------------------------------------------
+      # Run all tests (including previously environment-gated OFX tests)
+      # ------------------------------------------------------------------
       - name: Test (Linux)
         if: runner.os == 'Linux'
         env:
           QT_QPA_PLATFORM: offscreen
-          OAK_PLUGIN_SMOKE_TEST: "1"
         run: ctest --test-dir build --output-on-failure -C ${{ env.CMAKE_BUILD_TYPE }}
 
-      - name: Test (macOS/Windows)
-        if: runner.os != 'Linux'
-        env:
-          OAK_PLUGIN_SMOKE_TEST: "1"
+      - name: Test (macOS)
+        if: runner.os == 'macOS'
         run: ctest --test-dir build --output-on-failure -C ${{ env.CMAKE_BUILD_TYPE }}
 
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: ctest --test-dir build --output-on-failure -C ${{ env.CMAKE_BUILD_TYPE }}
+
+      # ------------------------------------------------------------------
+      # Filtered gtest runs for clearer CI output
+      # ------------------------------------------------------------------
       - name: Plugin Smoke Tests (Linux)
         if: runner.os == 'Linux'
         env:
           QT_QPA_PLATFORM: offscreen
-          OAK_PLUGIN_SMOKE_TEST: "1"
-        run: |
-          echo "Running plugin subsystem smoke tests..."
-          ./build/tests/gtest/olive-gtest --gtest_filter="PluginSmoke*"
+        run: ./build/tests/gtest/olive-gtest --gtest_filter="PluginSmoke*"
 
       - name: Plugin Smoke Tests (macOS)
         if: runner.os == 'macOS'
-        env:
-          OAK_PLUGIN_SMOKE_TEST: "1"
-        run: |
-          echo "Running plugin subsystem smoke tests..."
-          ./build/tests/gtest/olive-gtest --gtest_filter="PluginSmoke*"
+        run: ./build/tests/gtest/olive-gtest --gtest_filter="PluginSmoke*"
 
       - name: Plugin Smoke Tests (Windows)
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: msys2 {0}
+        run: ./build/tests/gtest/olive-gtest --gtest_filter="PluginSmoke*"
+
+      - name: OFX Integration Tests (Linux)
+        if: runner.os == 'Linux'
         env:
-          OAK_PLUGIN_SMOKE_TEST: "1"
-        run: |
-          Write-Host "Running plugin subsystem smoke tests..."
-          & "$env:GITHUB_WORKSPACE\build\tests\gtest\olive-gtest.exe" --gtest_filter="PluginSmoke*"
+          QT_QPA_PLATFORM: offscreen
+        run: ./build/tests/gtest/olive-gtest --gtest_filter="PluginIntegration.*:PluginMisc.*"
+
+      - name: OFX Integration Tests (macOS)
+        if: runner.os == 'macOS'
+        run: ./build/tests/gtest/olive-gtest --gtest_filter="PluginIntegration.*:PluginMisc.*"
+
+      - name: OFX Integration Tests (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: ./build/tests/gtest/olive-gtest --gtest_filter="PluginIntegration.*:PluginMisc.*"
 
       - name: Audio Smoke Tests (Linux)
         if: runner.os == 'Linux'
         env:
           QT_QPA_PLATFORM: offscreen
-        run: |
-          echo "Running audio subsystem smoke tests..."
-          ./build/tests/gtest/olive-gtest --gtest_filter="AudioSmoke*"
+        run: ./build/tests/gtest/olive-gtest --gtest_filter="AudioSmoke*"
 
       - name: Audio Smoke Tests (macOS)
         if: runner.os == 'macOS'
-        run: |
-          echo "Running audio subsystem smoke tests..."
-          ./build/tests/gtest/olive-gtest --gtest_filter="AudioSmoke*"
+        run: ./build/tests/gtest/olive-gtest --gtest_filter="AudioSmoke*"
 
       - name: Audio Smoke Tests (Windows)
         if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Write-Host "Running audio subsystem smoke tests..."
-          & "$env:GITHUB_WORKSPACE\build\tests\gtest\olive-gtest.exe" --gtest_filter="AudioSmoke*"
+        shell: msys2 {0}
+        run: ./build/tests/gtest/olive-gtest --gtest_filter="AudioSmoke*"
 
       - name: Viewer Smoke Tests (Linux)
         if: runner.os == 'Linux'
         env:
           QT_QPA_PLATFORM: offscreen
-        run: |
-          echo "Running viewer/preview subsystem smoke tests..."
-          ./build/tests/gtest/olive-gtest --gtest_filter="ViewerSmoke*"
+        run: ./build/tests/gtest/olive-gtest --gtest_filter="ViewerSmoke*"
 
       - name: Viewer Smoke Tests (macOS)
         if: runner.os == 'macOS'
-        run: |
-          echo "Running viewer/preview subsystem smoke tests..."
-          ./build/tests/gtest/olive-gtest --gtest_filter="ViewerSmoke*"
+        run: ./build/tests/gtest/olive-gtest --gtest_filter="ViewerSmoke*"
 
       - name: Viewer Smoke Tests (Windows)
         if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Write-Host "Running viewer/preview subsystem smoke tests..."
-          & "$env:GITHUB_WORKSPACE\build\tests\gtest\olive-gtest.exe" --gtest_filter="ViewerSmoke*"
+        shell: msys2 {0}
+        run: ./build/tests/gtest/olive-gtest --gtest_filter="ViewerSmoke*"

@@ -1,7 +1,6 @@
 # Build Guide
 
-This document describes how to build Oak Video Editor from source. For Chinese, see
-[`docs/build-zh.md`](docs/build-zh.md).
+This document describes how to build Oak Video Editor from source on Windows, Linux, and macOS.
 
 ## Prerequisites
 
@@ -17,14 +16,70 @@ This document describes how to build Oak Video Editor from source. For Chinese, 
 - OpenGL headers
 - XKB common (Linux)
 
-## Linux (Ubuntu/Debian)
+---
+
+## Windows (MSYS2)
+
+This guide uses [MSYS2](https://www.msys2.org/) with the MinGW-w64 toolchain.
+
+### 1. Install MSYS2
+
+Download and install MSYS2 from [https://www.msys2.org/](https://www.msys2.org/). Then open the **MSYS2 MinGW 64-bit** terminal.
+
+### 2. Install Dependencies
+
+```bash
+pacman -Syu
+pacman -S --needed \
+  mingw-w64-x86_64-cmake \
+  mingw-w64-x86_64-ninja \
+  mingw-w64-x86_64-qt6-base \
+  mingw-w64-x86_64-qt6-tools \
+  mingw-w64-x86_64-ffmpeg \
+  mingw-w64-x86_64-openimageio \
+  mingw-w64-x86_64-opencolorio \
+  mingw-w64-x86_64-openexr \
+  mingw-w64-x86_64-expat \
+  mingw-w64-x86_64-portaudio \
+  mingw-w64-x86_64-gcc
+```
+
+> **Note:** Qt 6 private headers may require additional packages depending on the MSYS2 repository state. If CMake reports missing private headers, install `mingw-w64-x86_64-qt6-base-private` if available.
+
+### 3. Clone and Build
+
+```bash
+# Clone the repository
+git clone --recursive https://github.com/OakVideoEditorCommunity/oak.git
+cd oak
+
+# Configure
+cmake -S . -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_QT6=ON
+
+# Build
+cmake --build build --config Release
+```
+
+### 4. Run Tests (Optional)
+
+```bash
+ctest --test-dir build --output-on-failure -C Release
+```
+
+---
+
+## Linux
+
+### Debian / Ubuntu
 
 Install dependencies:
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y \
-  ninja-build pkg-config \
+  cmake ninja-build pkg-config \
   qt6-base-dev qt6-base-dev-tools qt6-base-private-dev qt6-tools-dev qt6-tools-dev-tools \
   libavcodec-dev libavformat-dev libavfilter-dev libavutil-dev libswscale-dev libswresample-dev \
   libopencolorio-dev libopenimageio-dev libopenexr-dev libexpat1-dev \
@@ -44,16 +99,84 @@ Run tests:
 ctest --test-dir build --output-on-failure -C Release
 ```
 
+### Fedora
+
+Install dependencies:
+
+```bash
+sudo dnf install -y \
+  cmake ninja-build pkgconf-pkg-config \
+  qt6-qtbase-devel qt6-qtbase-private-devel qt6-qttools-devel \
+  ffmpeg-devel \
+  OpenImageIO-devel \
+  OpenColorIO-devel \
+  openexr-devel \
+  expat-devel \
+  portaudio-devel \
+  mesa-libGL-devel \
+  libxkbcommon-devel \
+  gcc-c++
+```
+
+Configure and build:
+
+```bash
+cmake -S . -B build -G Ninja -DBUILD_TESTS=ON -DBUILD_QT6=ON
+cmake --build build --config Release
+```
+
+Run tests:
+
+```bash
+ctest --test-dir build --output-on-failure -C Release
+```
+
+### Arch Linux
+
+Install dependencies:
+
+```bash
+sudo pacman -Syu
+sudo pacman -S --needed \
+  cmake ninja pkgconf \
+  qt6-base qt6-tools \
+  ffmpeg \
+  openimageio \
+  opencolorio \
+  openexr \
+  expat \
+  portaudio \
+  mesa \
+  libxkbcommon \
+  gcc
+```
+
+> **Note:** On Arch Linux, Qt 6 private headers are included in the `qt6-base` package.
+
+Configure and build:
+
+```bash
+cmake -S . -B build -G Ninja -DBUILD_TESTS=ON -DBUILD_QT6=ON
+cmake --build build --config Release
+```
+
+Run tests:
+
+```bash
+ctest --test-dir build --output-on-failure -C Release
+```
+
+---
+
 ## macOS (Non-Official Support)
 
-Note: macOS support is **non-official**. We only run CI automation on macOS
-and do not perform manual testing.
+Note: macOS support is **non-official**. We only run CI automation on macOS and do not perform manual testing.
 
 Install dependencies:
 
 ```bash
 brew update
-brew install ninja pkg-config qt@6 ffmpeg openimageio opencolorio openexr portaudio expat
+brew install cmake ninja pkg-config qt@6 ffmpeg openimageio opencolorio openexr portaudio expat
 ```
 
 Build OpenTimelineIO (optional, required for OTIO support):
@@ -89,30 +212,44 @@ Run tests:
 ctest --test-dir build --output-on-failure -C Release
 ```
 
-## Windows
+---
 
-Install Qt 6 (system installer or CI action). Use vcpkg for dependencies.
+## Build Options
 
-```powershell
-choco install -y ninja
-$env:VCPKG_ROOT = "C:\vcpkg"
-& "$env:VCPKG_ROOT\vcpkg.exe" install ffmpeg openimageio opencolorio openexr expat portaudio --triplet x64-windows
+| Option | Default | Description |
+|--------|---------|-------------|
+| `BUILD_TESTS` | `OFF` | Build unit tests |
+| `BUILD_DOXYGEN` | `OFF` | Build Doxygen documentation |
+| `USE_WERROR` | `OFF` | Treat warnings as errors |
+| `BUILD_QT6` | `ON` | Build with Qt 6 instead of Qt 5 |
+| `OTIO_LOCATION` | - | Path to OpenTimelineIO installation (optional) |
+| `OCIO_LOCATION` | - | Path to OpenColorIO installation |
+
+---
+
+## Troubleshooting
+
+### Qt 6 Not Found
+
+Ensure Qt 6 is in your PATH and CMake prefix path:
+
+```bash
+# Linux / macOS
+export PATH="/path/to/qt6/bin:$PATH"
+export CMAKE_PREFIX_PATH="/path/to/qt6"
+
+# Windows (MSYS2)
+export PATH="/mingw64/bin:$PATH"
 ```
 
-Configure and build:
+### Missing Private Headers
 
-```powershell
-cmake -S . -B build -G Ninja `
-  -DBUILD_TESTS=ON `
-  -DBUILD_QT6=ON `
-  -DCMAKE_BUILD_TYPE=Release `
-  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
-  -DCMAKE_PREFIX_PATH="$env:Qt6_DIR"
-cmake --build build --config Release
-```
+If you see errors about missing Qt private headers, install the corresponding private development package for your distribution (e.g., `qt6-base-private-dev` on Debian/Ubuntu, `qt6-qtbase-private-devel` on Fedora).
 
-Run tests:
+### FFmpeg Not Found
 
-```powershell
-ctest --test-dir build --output-on-failure -C Release
+Make sure FFmpeg development libraries are installed and `pkg-config` can locate them:
+
+```bash
+pkg-config --exists libavcodec && echo "Found" || echo "Not found"
 ```
