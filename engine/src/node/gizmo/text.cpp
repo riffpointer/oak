@@ -47,7 +47,7 @@ void TextGizmo::UpdateInputHtml(const QString &s, const rational &time)
 		MultiUndoCommand *command = new MultiUndoCommand();
 		Node::SetValueAtTime(input_.input(), time, s, input_.track(), command,
 							 true);
-		GetAppCallbacks()->get_undo_stack()->push(command, tr("Edit Text"));
+		oak_get_app_callbacks()->get_undo_stack()->push(command, tr("Edit Text"));
 	}
 }
 

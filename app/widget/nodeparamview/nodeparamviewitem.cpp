@@ -627,7 +627,7 @@ void NodeParamViewItemBody::ArrayAppendClicked()
 		if (it.value().append_btn == sender()) {
 			NodeInput real_input = NodeGroup::ResolveInput(
 				NodeInput(it.key().node, it.key().input));
-			Core::instance()->undo_stack()->push(
+			App::instance()->undo_stack()->push(
 				new NodeArrayInsertCommand(real_input.node(),
 										   real_input.input(),
 										   real_input.GetArraySize()),
@@ -645,7 +645,7 @@ void NodeParamViewItemBody::ArrayInsertClicked()
 		if (it.value().array_insert_btn == sender()) {
 			// Found our input and element
 			NodeInput ic = NodeGroup::ResolveInput(it.key());
-			Core::instance()->undo_stack()->push(
+			App::instance()->undo_stack()->push(
 				new NodeArrayInsertCommand(ic.node(), ic.input(), ic.element()),
 				tr("Inserted Array Element In %1 - %2")
 					.arg(ic.node()->GetLabelAndName(), ic.GetInputName()));
@@ -660,7 +660,7 @@ void NodeParamViewItemBody::ArrayRemoveClicked()
 		if (it.value().array_remove_btn == sender()) {
 			// Found our input and element
 			NodeInput ic = NodeGroup::ResolveInput(it.key());
-			Core::instance()->undo_stack()->push(
+			App::instance()->undo_stack()->push(
 				new NodeArrayRemoveCommand(ic.node(), ic.input(), ic.element()),
 				tr("Removed Array Element In %1 - %2")
 					.arg(ic.node()->GetLabelAndName(), ic.GetInputName()));

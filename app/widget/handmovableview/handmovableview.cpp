@@ -36,7 +36,7 @@ HandMovableView::HandMovableView(QWidget *parent)
 	, dragging_hand_(false)
 	, is_timeline_axes_(false)
 {
-	connect(Core::instance(), &Core::ToolChanged, this,
+	connect(App::instance(), &App::ToolChanged, this,
 			&HandMovableView::ApplicationToolChanged);
 }
 

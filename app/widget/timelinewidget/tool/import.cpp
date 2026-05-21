@@ -135,7 +135,7 @@ void ImportTool::DragMove(TimelineViewMouseEvent *event)
 												   parent()->GetGhostItems());
 
 			// If snapping is enabled, check for snap points
-			if (Core::instance()->snapping()) {
+			if (App::instance()->snapping()) {
 				parent()->SnapPoint(snap_points_, &time_movement);
 
 				time_movement = ValidateTimeMovement(time_movement);
@@ -160,7 +160,7 @@ void ImportTool::DragMove(TimelineViewMouseEvent *event)
 			QString tooltip_text =
 				QString::fromStdString(Timecode::time_to_timecode(
 					earliest_ghost, tooltip_timebase,
-					Core::instance()->GetTimecodeDisplay()));
+					App::instance()->GetTimecodeDisplay()));
 
 			// Force tooltip to update (otherwise the tooltip won't move as written in the documentation, and could get in the way
 			// of the cursor)
@@ -191,7 +191,7 @@ void ImportTool::DragDrop(TimelineViewMouseEvent *event)
 	if (!dragged_footage_.isEmpty()) {
 		auto command = new MultiUndoCommand();
 		DropGhosts(event->GetModifiers() & Qt::ControlModifier, command);
-		Core::instance()->undo_stack()->push(
+		App::instance()->undo_stack()->push(
 			command,
 			qApp->translate("ImportTool", "Dropped Footage Into Sequence"));
 
@@ -395,11 +395,11 @@ void ImportTool::DropGhosts(bool insert, MultiUndoCommand *parent_command)
 		}
 
 		if (behavior != kDWSDisable) {
-			Project *active_project = Core::instance()->GetActiveProject();
+			Project *active_project = App::instance()->GetActiveProject();
 
 			if (active_project) {
 				Sequence *new_sequence =
-					Core::instance()->CreateNewSequenceForProject(
+					App::instance()->CreateNewSequenceForProject(
 						active_project);
 
 				new_sequence->set_default_parameters();
@@ -431,12 +431,12 @@ void ImportTool::DropGhosts(bool insert, MultiUndoCommand *parent_command)
 				}
 
 				if (sequence_is_valid) {
-					dst_graph = Core::instance()->GetActiveProject();
+					dst_graph = App::instance()->GetActiveProject();
 
 					command->add_child(
 						new NodeAddCommand(dst_graph, new_sequence));
 					command->add_child(new FolderAddChild(
-						Core::instance()->GetSelectedFolderInActiveProject(),
+						App::instance()->GetSelectedFolderInActiveProject(),
 						new_sequence));
 					command->add_child(new NodeSetPositionCommand(
 						new_sequence, new_sequence, QPointF(0, 0)));

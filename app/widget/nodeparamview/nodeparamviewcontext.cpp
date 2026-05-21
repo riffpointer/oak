@@ -189,7 +189,7 @@ void NodeParamViewContext::AddEffectMenuItemTriggered(QAction *a)
 			command->add_child(new NodeEdgeAddCommand(n, ctx_input));
 		}
 
-		Core::instance()->undo_stack()->push(
+		App::instance()->undo_stack()->push(
 			command, tr("Added %1 to Node Chain").arg(n->Name()));
 	}
 }

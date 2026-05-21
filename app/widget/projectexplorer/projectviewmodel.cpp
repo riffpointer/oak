@@ -243,7 +243,7 @@ bool ProjectViewModel::setData(const QModelIndex &index, const QVariant &value,
 
 			nrc->AddNode(item, value.toString());
 
-			Core::instance()->undo_stack()->push(
+			App::instance()->undo_stack()->push(
 				nrc, tr("Renamed Item \"%1\" to \"%2\"")
 						 .arg(item->GetLabel(), new_name));
 
@@ -394,7 +394,7 @@ bool ProjectViewModel::dropMimeData(const QMimeData *data,
 			}
 		}
 
-		Core::instance()->undo_stack()->push(move_command,
+		App::instance()->undo_stack()->push(move_command,
 											 tr("Move %1 Item(s)").arg(count));
 
 		return true;
@@ -430,7 +430,7 @@ bool ProjectViewModel::dropMimeData(const QMimeData *data,
 		}
 
 		// Trigger an import
-		Core::instance()->ImportFiles(urls, static_cast<Folder *>(drop_item));
+		App::instance()->ImportFiles(urls, static_cast<Folder *>(drop_item));
 
 		return true;
 	}

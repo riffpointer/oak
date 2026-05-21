@@ -287,7 +287,7 @@ void SpeedDurationDialog::accept()
 					   tr("Set %1 Clip Properties").arg(clips_.size()) :
 					   tr("Set Clip \"%1\" Properties")
 						   .arg(clips_.first()->GetLabelOrName());
-	Core::instance()->undo_stack()->push(command, name);
+	App::instance()->undo_stack()->push(command, name);
 
 	super::accept();
 }

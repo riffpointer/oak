@@ -73,7 +73,7 @@ ViewerDisplayWidget::ViewerDisplayWidget(QWidget *parent)
 	, queue_starved_(false)
 	, text_edit_(nullptr)
 {
-	connect(Core::instance(), &Core::ToolChanged, this,
+	connect(App::instance(), &App::ToolChanged, this,
 			&ViewerDisplayWidget::ToolChanged);
 
 	// Initializes cursor based on tool
@@ -115,9 +115,9 @@ void ViewerDisplayWidget::SetMatrixCrop(const QMatrix4x4 &mat)
 
 void ViewerDisplayWidget::UpdateCursor()
 {
-	if (Core::instance()->tool() == Tool::kHand) {
+	if (App::instance()->tool() == Tool::kHand) {
 		this->inner_widget()->setCursor(Qt::OpenHandCursor);
-	} else if (Core::instance()->tool() == Tool::kAdd) {
+	} else if (App::instance()->tool() == Tool::kAdd) {
 		this->inner_widget()->setCursor(Qt::CrossCursor);
 	} else {
 		this->inner_widget()->unsetCursor();
@@ -254,14 +254,14 @@ void ViewerDisplayWidget::ResetFPSTimer()
 	frames_skipped_ = 0;
 	frame_rate_average_count_ = 0;
 
-	Core::instance()->ClearStatusBarMessage();
+	App::instance()->ClearStatusBarMessage();
 }
 
 void ViewerDisplayWidget::IncrementSkippedFrames()
 {
 	frames_skipped_++;
 
-	Core::instance()->ShowStatusBarMessage(
+	App::instance()->ShowStatusBarMessage(
 		tr("%n skipped frame(s) detected during playback", nullptr,
 		   frames_skipped_),
 		10000);
@@ -676,7 +676,7 @@ rational ViewerDisplayWidget::GetGizmoTime()
 bool ViewerDisplayWidget::IsHandDrag(QMouseEvent *event) const
 {
 	return event->button() == Qt::MiddleButton ||
-		   Core::instance()->tool() == Tool::kHand;
+		   App::instance()->tool() == Tool::kHand;
 }
 
 void ViewerDisplayWidget::UpdateMatrix()
@@ -896,7 +896,7 @@ void ViewerDisplayWidget::OpenTextGizmo(TextGizmo *text, QMouseEvent *event)
 
 	// Grab focus back from the toolbar
 	connect(text_toolbar_, &ViewerTextEditorToolBar::FirstPaint, this, [this] {
-		Core::instance()->main_window()->activateWindow();
+		App::instance()->main_window()->activateWindow();
 		inner_widget()->setFocus();
 	});
 }
@@ -916,10 +916,10 @@ bool ViewerDisplayWidget::OnMousePress(QMouseEvent *event)
 		return true;
 
 	} else if (event->button() == Qt::LeftButton) {
-		if (Core::instance()->tool() == Tool::kAdd &&
-			(Core::instance()->GetSelectedAddableObject() ==
+		if (App::instance()->tool() == Tool::kAdd &&
+			(App::instance()->GetSelectedAddableObject() ==
 				 Tool::kAddableShape ||
-			 Core::instance()->GetSelectedAddableObject() ==
+			 App::instance()->GetSelectedAddableObject() ==
 				 Tool::kAddableTitle)) {
 			add_band_start_ = event->pos();
 			add_band_end_ = add_band_start_;
@@ -1041,7 +1041,7 @@ bool ViewerDisplayWidget::OnMouseRelease(QMouseEvent *e)
 					dynamic_cast<DraggableGizmo *>(current_gizmo_)) {
 				draggable->DragEnd(command);
 			}
-			Core::instance()->undo_stack()->push(command, tr("Dragged Gizmo"));
+			App::instance()->undo_stack()->push(command, tr("Dragged Gizmo"));
 			gizmo_drag_started_ = false;
 		}
 		current_gizmo_ = nullptr;

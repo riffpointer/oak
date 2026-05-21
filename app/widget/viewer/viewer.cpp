@@ -169,10 +169,10 @@ ViewerWidget::ViewerWidget(ViewerDisplayWidget *display, QWidget *parent)
 
 	UpdateWaveformViewFromMode();
 
-	connect(Core::instance(), &Core::ColorPickerEnabled, this,
+	connect(App::instance(), &App::ColorPickerEnabled, this,
 			&ViewerWidget::SetSignalCursorColorEnabled);
-	connect(this, &ViewerWidget::CursorColor, Core::instance(),
-			&Core::ColorPickerColorEmitted);
+	connect(this, &ViewerWidget::CursorColor, App::instance(),
+			&App::ColorPickerColorEmitted);
 	connect(AudioManager::instance(), &AudioManager::OutputParamsChanged, this,
 			&ViewerWidget::UpdateAudioProcessor);
 }
@@ -639,7 +639,7 @@ void ViewerWidget::CreateAddableAt(const QRectF &f)
 			shape->SetRect(f, s->GetVideoParams(), command);
 		}
 
-		Core::instance()->undo_stack()->push(command, tr("Created Shape"));
+		App::instance()->undo_stack()->push(command, tr("Created Shape"));
 		SetGizmos(clip);
 	}
 }
@@ -703,7 +703,7 @@ void ViewerWidget::RequestNextDryRun()
 
 void ViewerWidget::SaveFrameAsImage()
 {
-	Core::instance()->OpenExportDialogForViewer(GetConnectedNode(), true);
+	App::instance()->OpenExportDialogForViewer(GetConnectedNode(), true);
 }
 
 void ViewerWidget::DetectMulticamNodeNow()
@@ -925,7 +925,7 @@ void ViewerWidget::ReceivedAudioBufferForScrubbing()
 							AudioManager::instance()->ClearBufferedOutput();
 							if (!AudioManager::instance()->PushToOutput(
 									audio_processor_.to(), packed, &error)) {
-								Core::instance()->ShowStatusBarMessage(
+								App::instance()->ShowStatusBarMessage(
 									tr("Audio scrubbing failed: %1").arg(error));
 							}
 							AudioMonitor::PushSampleBufferOnAll(samples);
@@ -1413,7 +1413,7 @@ void ViewerWidget::ContextMenuSetPlaybackRes(QAction *action)
 		NodeKeyframeTrackReference(
 			NodeInput(GetConnectedNode(), ViewerOutput::kVideoParamsInput, 0)),
 		QVariant::fromValue(vp));
-	Core::instance()->undo_stack()->push(c, tr("Changed Playback Resolution"));
+	App::instance()->undo_stack()->push(c, tr("Changed Playback Resolution"));
 }
 
 void ViewerWidget::ContextMenuDisableSafeMargins()

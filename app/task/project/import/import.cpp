@@ -41,7 +41,7 @@ ProjectImportTask::ProjectImportTask(Folder *folder,
 		filenames_.append(QFileInfo(f));
 	}
 
-	file_count_ = Core::CountFilesInFileList(filenames_);
+	file_count_ = App::CountFilesInFileList(filenames_);
 
 	SetTitle(tr("Importing %n file(s)", nullptr, file_count_));
 }
@@ -176,7 +176,7 @@ void ProjectImportTask::ValidateImageSequence(Footage *footage,
 			// user just in case...
 			bool is_sequence;
 
-			QMetaObject::invokeMethod(Core::instance(), "ConfirmImageSequence",
+			QMetaObject::invokeMethod(App::instance(), "ConfirmImageSequence",
 									  Qt::BlockingQueuedConnection,
 									  Q_RETURN_ARG(bool, is_sequence),
 									  Q_ARG(QString, footage->filename()));

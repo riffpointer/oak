@@ -40,7 +40,7 @@ add_executable(olive-gtest
   timeline_workarea_test.cpp
 )
 
-target_sources(olive-gtest PRIVATE $<TARGET_OBJECTS:libolive-editor>)
+target_sources(olive-gtest PRIVATE $<TARGET_OBJECTS:liboak-editor>)
 
 target_include_directories(
   olive-gtest

@@ -76,7 +76,7 @@ void ConfigDialogBase::accept()
 		tab->Accept(command);
 	}
 
-	Core::instance()->undo_stack()->push(command, tr("Set Configuration"));
+	App::instance()->undo_stack()->push(command, tr("Set Configuration"));
 
 	AcceptEvent();
 

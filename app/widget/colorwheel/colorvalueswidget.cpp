@@ -61,7 +61,7 @@ ColorValuesWidget::ColorValuesWidget(ColorManager *manager, QWidget *parent)
 		color_picker_btn_->setCheckable(true);
 		connect(color_picker_btn_, &QPushButton::toggled, this,
 				&ColorValuesWidget::ColorPickedBtnToggled);
-		connect(Core::instance(), &Core::ColorPickerColorEmitted, this,
+		connect(App::instance(), &App::ColorPickerColorEmitted, this,
 				&ColorValuesWidget::SetReferenceColor);
 		preview_layout->addWidget(color_picker_btn_);
 
@@ -183,7 +183,7 @@ void ColorValuesWidget::UpdateValuesFromDisplay()
 
 void ColorValuesWidget::ColorPickedBtnToggled(bool e)
 {
-	Core::instance()->RequestPixelSamplingInViewers(e);
+	App::instance()->RequestPixelSamplingInViewers(e);
 
 	if (e) {
 		qApp->installEventFilter(this);

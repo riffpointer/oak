@@ -347,7 +347,7 @@ bool DiskCacheFolder::DeleteLeastRecent()
 		bool e = DeleteFileInternal(hash_to_delete);
 
 		if (e) {
-			if (auto *cb = GetAppCallbacks()) {
+			if (auto *cb = oak_get_app_callbacks()) {
 				if (cb->warn_cache_full) {
 					cb->warn_cache_full();
 				}

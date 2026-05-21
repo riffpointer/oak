@@ -50,31 +50,31 @@ MainMenu::MainMenu(MainWindow *parent)
 	file_menu_ = new Menu(this, this, &MainMenu::FileMenuAboutToShow);
 	file_new_menu_ = new Menu(file_menu_);
 	MenuShared::instance()->AddItemsForNewMenu(file_new_menu_);
-	file_open_item_ = file_menu_->AddItem("openproj", Core::instance(),
-										  &Core::OpenProject, tr("Ctrl+O"));
+	file_open_item_ = file_menu_->AddItem("openproj", App::instance(),
+										  &App::OpenProject, tr("Ctrl+O"));
 	file_open_recent_menu_ = new Menu(file_menu_);
 	file_open_recent_separator_ = file_open_recent_menu_->addSeparator();
 	file_open_recent_clear_item_ = file_open_recent_menu_->AddItem(
-		"clearopenrecent", Core::instance(), &Core::ClearOpenRecentList);
-	file_save_item_ = file_menu_->AddItem("saveproj", Core::instance(),
-										  &Core::SaveProject, tr("Ctrl+S"));
-	file_save_as_item_ = file_menu_->AddItem("saveprojas", Core::instance(),
-											 &Core::SaveProjectAs,
+		"clearopenrecent", App::instance(), &App::ClearOpenRecentList);
+	file_save_item_ = file_menu_->AddItem("saveproj", App::instance(),
+										  &App::SaveProject, tr("Ctrl+S"));
+	file_save_as_item_ = file_menu_->AddItem("saveprojas", App::instance(),
+											 &App::SaveProjectAs,
 											 tr("Ctrl+Shift+S"));
 	file_menu_->addSeparator();
-	file_revert_item_ = file_menu_->AddItem("revert", Core::instance(),
-											&Core::RevertProject, tr("F12"));
+	file_revert_item_ = file_menu_->AddItem("revert", App::instance(),
+											&App::RevertProject, tr("F12"));
 	file_menu_->addSeparator();
 	file_import_item_ = file_menu_->AddItem(
-		"import", Core::instance(), &Core::DialogImportShow, tr("Ctrl+I"));
+		"import", App::instance(), &App::DialogImportShow, tr("Ctrl+I"));
 	file_menu_->addSeparator();
 	file_export_menu_ = new Menu(file_menu_);
 	file_export_media_item_ = file_export_menu_->AddItem(
-		"export", Core::instance(), &Core::DialogExportShow, tr("Ctrl+M"));
+		"export", App::instance(), &App::DialogExportShow, tr("Ctrl+M"));
 	file_menu_->addSeparator();
 	file_project_properties_item_ = file_menu_->AddItem(
-		"projectproperties", Core::instance(),
-		&Core::DialogProjectPropertiesShow, tr("Shift+F10"));
+		"projectproperties", App::instance(),
+		&App::DialogProjectPropertiesShow, tr("Shift+F10"));
 	file_menu_->addSeparator();
 	file_exit_item_ = file_menu_->AddItem("exit", parent, &MainWindow::close);
 
@@ -88,10 +88,10 @@ MainMenu::MainMenu(MainWindow *parent)
 	connect(edit_menu_, &Menu::aboutToHide, this,
 			&MainMenu::EditMenuAboutToHide);
 
-	edit_undo_item_ = Core::instance()->undo_stack()->GetUndoAction();
+	edit_undo_item_ = App::instance()->undo_stack()->GetUndoAction();
 	Menu::ConformItem(edit_undo_item_, "undo", tr("Ctrl+Z"));
 	edit_menu_->addAction(edit_undo_item_);
-	edit_redo_item_ = Core::instance()->undo_stack()->GetRedoAction();
+	edit_redo_item_ = App::instance()->undo_stack()->GetRedoAction();
 	Menu::ConformItem(edit_redo_item_, "redo", tr("Ctrl+Shift+Z"));
 	edit_menu_->addAction(edit_redo_item_);
 
@@ -353,19 +353,19 @@ MainMenu::MainMenu(MainWindow *parent)
 
 	tools_menu_->addSeparator();
 
-	tools_snapping_item_ = tools_menu_->AddItem("snapping", Core::instance(),
-												&Core::SetSnapping, tr("S"));
+	tools_snapping_item_ = tools_menu_->AddItem("snapping", App::instance(),
+												&App::SetSnapping, tr("S"));
 	tools_snapping_item_->setCheckable(true);
-	tools_snapping_item_->setChecked(Core::instance()->snapping());
+	tools_snapping_item_->setChecked(App::instance()->snapping());
 
 	tools_menu_->addSeparator();
 
 	tools_preferences_item_ = tools_menu_->AddItem(
-		"prefs", Core::instance(), &Core::DialogPreferencesShow, tr("Ctrl+,"));
+		"prefs", App::instance(), &App::DialogPreferencesShow, tr("Ctrl+,"));
 
 #ifndef NDEBUG
 	tools_magic_item_ =
-		tools_menu_->AddItem("magic", Core::instance(), &Core::SetMagic);
+		tools_menu_->AddItem("magic", App::instance(), &App::SetMagic);
 	tools_magic_item_->setCheckable(true);
 #endif
 
@@ -380,9 +380,9 @@ MainMenu::MainMenu(MainWindow *parent)
 		help_menu_->AddItem("feedback", this, &MainMenu::HelpFeedbackTriggered);
 	help_menu_->addSeparator();
 	help_about_item_ =
-		help_menu_->AddItem("about", Core::instance(), &Core::DialogAboutShow);
+		help_menu_->AddItem("about", App::instance(), &App::DialogAboutShow);
 
-	connect(Core::instance(), &Core::OpenRecentListChanged, this,
+	connect(App::instance(), &App::OpenRecentListChanged, this,
 			&MainMenu::RepopulateOpenRecent);
 	PopulateOpenRecent();
 
@@ -406,12 +406,12 @@ void MainMenu::ToolItemTriggered()
 	Tool::Item tool = static_cast<Tool::Item>(action->data().toInt());
 
 	// Set the Tool in Core
-	Core::instance()->SetTool(tool);
+	App::instance()->SetTool(tool);
 }
 
 void MainMenu::FileMenuAboutToShow()
 {
-	Project *active_project = Core::instance()->GetActiveProject();
+	Project *active_project = App::instance()->GetActiveProject();
 
 	file_save_item_->setEnabled(active_project);
 	file_save_as_item_->setEnabled(active_project);
@@ -460,14 +460,14 @@ void MainMenu::ToolsMenuAboutToShow()
 	// Ensure checked Tool is correct
 	QList<QAction *> tool_actions = tools_group_->actions();
 	foreach (QAction *a, tool_actions) {
-		if (a->data() == Core::instance()->tool()) {
+		if (a->data() == App::instance()->tool()) {
 			a->setChecked(true);
 			break;
 		}
 	}
 
 	// Ensure snapping value is correct
-	tools_snapping_item_->setChecked(Core::instance()->snapping());
+	tools_snapping_item_->setChecked(App::instance()->snapping());
 }
 
 void MainMenu::PlaybackMenuAboutToShow()
@@ -521,7 +521,7 @@ void MainMenu::WindowMenuAboutToShow()
 
 void MainMenu::PopulateOpenRecent()
 {
-	if (Core::instance()->GetRecentProjects().isEmpty()) {
+	if (App::instance()->GetRecentProjects().isEmpty()) {
 		// Insert dummy/disabled action to show there's nothing
 		QAction *a = new QAction(tr("(None)"));
 		a->setEnabled(false);
@@ -529,9 +529,9 @@ void MainMenu::PopulateOpenRecent()
 
 	} else {
 		// Populate menu with recently opened projects
-		for (int i = 0; i < Core::instance()->GetRecentProjects().size(); i++) {
+		for (int i = 0; i < App::instance()->GetRecentProjects().size(); i++) {
 			QAction *a =
-				new QAction(Core::instance()->GetRecentProjects().at(i));
+				new QAction(App::instance()->GetRecentProjects().at(i));
 			a->setData(i);
 			connect(a, &QAction::triggered, this,
 					&MainMenu::OpenRecentItemTriggered);
@@ -758,25 +758,25 @@ void MainMenu::GoToOutTriggered()
 
 void MainMenu::OpenRecentItemTriggered()
 {
-	Core::instance()->OpenProjectFromRecentList(
+	App::instance()->OpenProjectFromRecentList(
 		static_cast<QAction *>(sender())->data().toInt());
 }
 
 void MainMenu::SequenceCacheTriggered()
 {
-	Core::instance()->CacheActiveSequence(false);
+	App::instance()->CacheActiveSequence(false);
 }
 
 void MainMenu::SequenceCacheInOutTriggered()
 {
-	Core::instance()->CacheActiveSequence(true);
+	App::instance()->CacheActiveSequence(true);
 }
 
 void MainMenu::SequenceCacheClearTriggered()
 {
 	DiskCacheDialog::ClearDiskCache(
-		Core::instance()->GetActiveProject()->cache_path(),
-		Core::instance()->main_window());
+		App::instance()->GetActiveProject()->cache_path(),
+		App::instance()->main_window());
 }
 
 void MainMenu::HelpFeedbackTriggered()
@@ -805,7 +805,7 @@ void MainMenu::Retranslate()
 
 	// Edit menu
 	edit_menu_->setTitle(tr("&Edit"));
-	Core::instance()->undo_stack()->UpdateActions(); // Update undo and redo
+	App::instance()->undo_stack()->UpdateActions(); // Update undo and redo
 	edit_delete2_item_->setText(tr("Delete (alt)"));
 	edit_insert_item_->setText(tr("Insert"));
 	edit_overwrite_item_->setText(tr("Overwrite"));

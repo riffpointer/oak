@@ -42,7 +42,7 @@ void EditTool::MouseMove(TimelineViewMouseEvent *event)
 	if (dragging_) {
 		rational end_frame = event->GetFrame(true);
 
-		if (Core::instance()->snapping()) {
+		if (App::instance()->snapping()) {
 			rational movement;
 			parent()->SnapPoint({ end_frame }, &movement);
 			if (!movement.isNull()) {
@@ -61,7 +61,7 @@ void EditTool::MouseMove(TimelineViewMouseEvent *event)
 		start_coord_ = event->GetCoordinates(true);
 
 		// Snap if we're snapping
-		if (Core::instance()->snapping()) {
+		if (App::instance()->snapping()) {
 			rational movement;
 			parent()->SnapPoint({ start_coord_.GetFrame() }, &movement);
 			if (!movement.isNull()) {

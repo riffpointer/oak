@@ -156,7 +156,7 @@ void NodeView::DeleteSelected()
 		count += ctx->DeleteSelected(command);
 	}
 
-	Core::instance()->undo_stack()->push(command,
+	App::instance()->undo_stack()->push(command,
 										 tr("Deleted %1 Node(s)").arg(count));
 }
 
@@ -263,7 +263,7 @@ void NodeView::CopySelected(bool cut)
 
 	ProjectSerializer::Save(&writer, sdata);
 
-	Core::CopyStringToClipboard(copy_str);
+	App::CopyStringToClipboard(copy_str);
 
 	if (cut) {
 		DeleteSelected();
@@ -380,7 +380,7 @@ void NodeView::SetColorLabel(int index)
 		command->add_child(new NodeOverrideColorCommand(node, index));
 	}
 
-	Core::instance()->undo_stack()->push(
+	App::instance()->undo_stack()->push(
 		command, tr("Set Color of %1 Node(s)").arg(selected_nodes_.size()));
 }
 
@@ -438,7 +438,7 @@ void NodeView::keyPressEvent(QKeyEvent *event)
 				}
 			}
 		}
-		Core::instance()->undo_stack()->push(
+		App::instance()->undo_stack()->push(
 			pos_command, tr("Moved %1 Node(s)").arg(selected_nodes_.size()));
 		break;
 	}
@@ -619,7 +619,7 @@ void NodeView::mouseReleaseEvent(QMouseEvent *event)
 		}
 	}
 
-	Core::instance()->undo_stack()->push(
+	App::instance()->undo_stack()->push(
 		command, tr("Moved %1 Node(s)").arg(dragging_items_.size()));
 
 	dragging_items_.clear();
@@ -726,7 +726,7 @@ void NodeView::dropEvent(QDropEvent *event)
 		MultiUndoCommand *command = new MultiUndoCommand();
 		QVector<Node *> select_nodes =
 			ProcessDroppingAttachedNodes(command, drop_ctx, event->pos());
-		Core::instance()->undo_stack()->push(
+		App::instance()->undo_stack()->push(
 			command, tr("Dropped %1 Node(s)").arg(select_nodes.size()));
 
 		DeselectAll();
@@ -941,7 +941,7 @@ void NodeView::OpenSelectedNodeInViewer()
 	// Find first viewer in list of selected nodes and open it
 	foreach (Node *n, selected_nodes_) {
 		if (ViewerOutput *viewer = dynamic_cast<ViewerOutput *>(n)) {
-			Core::instance()->OpenNodeInViewer(viewer);
+			App::instance()->OpenNodeInViewer(viewer);
 			break;
 		}
 	}
@@ -1536,9 +1536,9 @@ void NodeView::GroupNodes()
 	command->add_child(new NodeSetPositionCommand(group, context, avg_pos));
 
 	// Do command
-	Core::instance()->LabelNodes({ group }, command);
+	App::instance()->LabelNodes({ group }, command);
 
-	Core::instance()->undo_stack()->push(command, tr("Grouped Nodes"));
+	App::instance()->undo_stack()->push(command, tr("Grouped Nodes"));
 }
 
 void NodeView::UngroupNodes()
@@ -1577,7 +1577,7 @@ void NodeView::UngroupNodes()
 			it.key(), context, group->GetNodePositionDataInContext(it.key())));
 	}
 
-	Core::instance()->undo_stack()->push(command, tr("Ungrouped Nodes"));
+	App::instance()->undo_stack()->push(command, tr("Ungrouped Nodes"));
 }
 
 void NodeView::ShowNodeProperties()
@@ -1639,7 +1639,7 @@ void NodeView::ShowNodeProperties()
 
 void NodeView::LabelSelectedNodes()
 {
-	Core::instance()->LabelNodes(selected_nodes_);
+	App::instance()->LabelNodes(selected_nodes_);
 }
 
 void NodeView::ItemAboutToBeDeleted(NodeViewItem *item)
@@ -1838,7 +1838,7 @@ void NodeView::EndEdgeDrag(bool cancel)
 	}
 	create_edge_expanded_items_.clear();
 
-	Core::instance()->undo_stack()->push(command, command_name);
+	App::instance()->undo_stack()->push(command, command_name);
 }
 
 void NodeView::PostPaste(const QVector<Node *> &new_nodes,

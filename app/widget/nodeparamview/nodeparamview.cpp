@@ -453,7 +453,7 @@ void NodeParamView::DeleteSelected()
 			}
 		}
 
-		Core::instance()->undo_stack()->push(
+		App::instance()->undo_stack()->push(
 			c, tr("Deleted %1 Node(s)").arg(selected_nodes_.size()));
 	}
 }
@@ -702,7 +702,7 @@ bool NodeParamView::Paste(
 		}
 	}
 
-	Core::instance()->undo_stack()->push(
+	App::instance()->undo_stack()->push(
 		command, tr("Pasted %1 Node(s)").arg(nodes_to_paste_as_new.size()));
 
 	return true;

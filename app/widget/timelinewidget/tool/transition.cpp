@@ -102,13 +102,13 @@ void TransitionTool::MouseRelease(TimelineViewMouseEvent *event)
 		if (!ghost_->GetAdjustedLength().isNull()) {
 			TransitionBlock *transition;
 
-			if (Core::instance()->GetSelectedTransition().isEmpty()) {
+			if (App::instance()->GetSelectedTransition().isEmpty()) {
 				// Fallback if the user hasn't selected one yet
 				transition = new CrossDissolveTransition();
 			} else {
 				transition =
 					static_cast<TransitionBlock *>(NodeFactory::CreateFromID(
-						Core::instance()->GetSelectedTransition()));
+						App::instance()->GetSelectedTransition()));
 			}
 
 			// Set transition length
@@ -180,7 +180,7 @@ void TransitionTool::MouseRelease(TimelineViewMouseEvent *event)
 					block_to_transition, transition, QPointF(-1, 0)));
 			}
 
-			Core::instance()->undo_stack()->push(
+			App::instance()->undo_stack()->push(
 				command,
 				qApp->translate("TransitionTool", "Created Transition"));
 

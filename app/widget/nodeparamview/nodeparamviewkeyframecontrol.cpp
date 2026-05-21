@@ -203,7 +203,7 @@ void NodeParamViewKeyframeControl::ToggleKeyframe(bool e)
 		}
 	}
 
-	Core::instance()->undo_stack()->push(command, tr("Toggled Keyframe"));
+	App::instance()->undo_stack()->push(command, tr("Toggled Keyframe"));
 }
 
 void NodeParamViewKeyframeControl::UpdateState()
@@ -320,7 +320,7 @@ void NodeParamViewKeyframeControl::KeyframeEnableBtnClicked(bool e)
 		}
 	}
 
-	Core::instance()->undo_stack()->push(command, command_name);
+	App::instance()->undo_stack()->push(command, command_name);
 }
 
 void NodeParamViewKeyframeControl::KeyframeEnableChanged(const NodeInput &input,

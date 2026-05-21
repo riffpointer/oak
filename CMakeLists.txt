@@ -17,7 +17,7 @@
 
 cmake_minimum_required(VERSION 3.13 FATAL_ERROR)
 
-project(olive-editor VERSION 0.2.0 LANGUAGES CXX)
+project(oak-editor VERSION 0.2.0 LANGUAGES CXX)
 
 
 set(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} -DOFX_SUPPORTS_OPENGLRENDER)
@@ -188,7 +188,7 @@ list(APPEND OLIVE_LIBRARIES
   KDAB::kddockwidgets
 )
 
-# Link OFX HostSupport wherever libolive-editor objects are used.
+# Link OFX HostSupport wherever liboak-editor objects are used.
 list(APPEND OLIVE_LIBRARIES OfxHost)
 
 # Link FFmpeg

@@ -62,7 +62,7 @@ void SlipTool::ProcessDrag(const TimelineCoordinate &mouse_pos)
 	QToolTip::showText(QCursor::pos(),
 					   QString::fromStdString(Timecode::time_to_timecode(
 						   time_movement, tooltip_timebase,
-						   Core::instance()->GetTimecodeDisplay(), true)),
+						   App::instance()->GetTimecodeDisplay(), true)),
 					   parent());
 }
 
@@ -84,7 +84,7 @@ void SlipTool::FinishDrag(TimelineViewMouseEvent *event)
 		}
 	}
 
-	Core::instance()->undo_stack()->push(
+	App::instance()->undo_stack()->push(
 		command, qApp->translate("SlipTool", "Slipped %1 Clip(s)")
 					 .arg(parent()->GetGhostItems().size()));
 }

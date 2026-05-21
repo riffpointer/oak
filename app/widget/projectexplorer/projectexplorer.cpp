@@ -231,7 +231,7 @@ bool ProjectExplorer::DeleteItemsInternal(const QVector<Node *> &selected,
 		if (can_delete_item) {
 			Sequence *sequence = dynamic_cast<Sequence *>(node);
 			if (sequence &&
-				Core::instance()->main_window()->IsSequenceOpen(sequence)) {
+				App::instance()->main_window()->IsSequenceOpen(sequence)) {
 				command->add_child(new CloseSequenceCommand(sequence));
 			}
 
@@ -348,8 +348,8 @@ void ProjectExplorer::ShowContextMenu()
 
 		// "Import" action
 		QAction *import_action = menu.addAction(tr("&Import..."));
-		connect(import_action, &QAction::triggered, Core::instance(),
-				&Core::DialogImportShow);
+		connect(import_action, &QAction::triggered, App::instance(),
+				&App::DialogImportShow);
 	} else {
 		// Actions to add when only one item is selected
 		if (context_menu_items_.size() == 1) {
@@ -470,7 +470,7 @@ void ProjectExplorer::ShowItemPropertiesDialog()
 		fpd.exec();
 
 	} else if (dynamic_cast<Folder *>(sel)) {
-		Core::instance()->LabelNodes(context_menu_items_);
+		App::instance()->LabelNodes(context_menu_items_);
 
 	} else if (dynamic_cast<Sequence *>(sel)) {
 		SequenceDialog sd(static_cast<Sequence *>(sel),
@@ -511,9 +511,9 @@ void ProjectExplorer::ReplaceSelectedFootage()
 
 	QString file = QFileDialog::getOpenFileName(
 		this, tr("Replace Footage"), QString(),
-		Core::FootageFileDialogFilter());
+		App::FootageFileDialogFilter());
 	if (!file.isEmpty()) {
-		if (!Core::IsFootageExtensionAllowed(file)) {
+		if (!App::IsFootageExtensionAllowed(file)) {
 			QMessageBox::warning(
 				this, tr("Unsupported media"),
 				tr("This file type is not allowed by the current media type "
@@ -535,19 +535,19 @@ void ProjectExplorer::ReplaceSelectedFootage()
 				new NodeRenameCommand(footage, QFileInfo(file).fileName()));
 		}
 
-		Core::instance()->undo_stack()->push(p, tr("Replaced Footage"));
+		App::instance()->undo_stack()->push(p, tr("Replaced Footage"));
 	}
 }
 
 void ProjectExplorer::OpenContextMenuItemInNewTab()
 {
-	Core::instance()->main_window()->OpenFolder(
+	App::instance()->main_window()->OpenFolder(
 		static_cast<Folder *>(context_menu_items_.first()), false);
 }
 
 void ProjectExplorer::OpenContextMenuItemInNewWindow()
 {
-	Core::instance()->main_window()->OpenFolder(
+	App::instance()->main_window()->OpenFolder(
 		static_cast<Folder *>(context_menu_items_.first()), true);
 }
 
@@ -719,7 +719,7 @@ void ProjectExplorer::DeleteSelected()
 	bool check_if_item_is_in_use = true;
 
 	if (DeleteItemsInternal(selected, check_if_item_is_in_use, command)) {
-		Core::instance()->undo_stack()->push(
+		App::instance()->undo_stack()->push(
 			command, tr("Deleted %1 Item(s)").arg(selected.size()));
 	} else {
 		delete command;

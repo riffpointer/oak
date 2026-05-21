@@ -160,7 +160,7 @@ void SequenceDialog::accept()
 			sequence_, video_params, audio_params, name_field_->text(),
 			parameter_tab_->GetSelectedPreviewAutoCache());
 
-		Core::instance()->undo_stack()->push(
+		App::instance()->undo_stack()->push(
 			param_command,
 			tr("Set Sequence Parameters For \"%1\"").arg(sequence_->GetLabel()));
 

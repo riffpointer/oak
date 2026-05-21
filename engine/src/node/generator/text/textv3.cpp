@@ -301,7 +301,7 @@ void TextGeneratorV3::GizmoDeactivated()
 
 void TextGeneratorV3::SetVerticalAlignmentUndoable(Qt::Alignment a)
 {
-	GetAppCallbacks()->get_undo_stack()->push(
+	oak_get_app_callbacks()->get_undo_stack()->push(
 		new NodeParamSetStandardValueCommand(NodeInput(this,
 													   kVerticalAlignmentInput),
 											 GetOurAlignmentFromQts(a)),

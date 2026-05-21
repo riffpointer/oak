@@ -237,7 +237,7 @@ bool TimeBasedView::PlayheadMove(QMouseEvent *event)
 		QPointF scene_pos = mapToScene(event->pos());
 		rational mouse_time = qMax(rational(0), SceneToTime(scene_pos.x()));
 
-		if (Core::instance()->snapping() && snap_service_) {
+		if (App::instance()->snapping() && snap_service_) {
 			rational movement;
 
 			snap_service_->SnapPoint({ mouse_time }, &movement,

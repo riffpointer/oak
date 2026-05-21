@@ -79,7 +79,7 @@ void TimelineView::mousePressEvent(QMouseEvent *event)
 	if (HandPress(event) ||
 		(!GetItemAtScenePos(timeline_event.GetFrame(),
 							timeline_event.GetTrack().index()) &&
-		 Core::instance()->tool() != Tool::kAdd && PlayheadPress(event))) {
+		 App::instance()->tool() != Tool::kAdd && PlayheadPress(event))) {
 		// Let the parent handle this
 		return;
 	}
@@ -115,13 +115,13 @@ void TimelineView::mouseMoveEvent(QMouseEvent *event)
 				tr("In: %1\nOut: %2\nDuration: %3")
 					.arg(QString::fromStdString(Timecode::time_to_timecode(
 							 b->in(), timebase(),
-							 Core::instance()->GetTimecodeDisplay())),
+							 App::instance()->GetTimecodeDisplay())),
 						 QString::fromStdString(Timecode::time_to_timecode(
 							 b->out(), timebase(),
-							 Core::instance()->GetTimecodeDisplay())),
+							 App::instance()->GetTimecodeDisplay())),
 						 QString::fromStdString(Timecode::time_to_timecode(
 							 b->length(), timebase(),
-							 Core::instance()->GetTimecodeDisplay()))));
+							 App::instance()->GetTimecodeDisplay()))));
 		} else {
 			setToolTip(QString());
 		}

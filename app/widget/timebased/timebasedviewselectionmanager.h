@@ -232,7 +232,7 @@ public:
 			}
 		}
 
-		if (Core::instance()->snapping() && view_->GetSnapService()) {
+		if (App::instance()->snapping() && view_->GetSnapService()) {
 			view_->GetSnapService()->SnapPoint(copy, movement, snap_mask_);
 		}
 	}
@@ -256,7 +256,7 @@ public:
 		SnapPoints(&time_diff);
 
 		// Validate snapping
-		if (Core::instance()->snapping() && view_->GetSnapService()) {
+		if (App::instance()->snapping() && view_->GetSnapService()) {
 			for (size_t i = 0; i < selected_.size(); i++) {
 				rational proposed_time = dragging_.at(i) + time_diff;
 				T *sel = selected_.at(i);
@@ -324,7 +324,7 @@ public:
 		}
 
 		QString tip = QString::fromStdString(Timecode::time_to_timecode(
-			display_time, timebase_, Core::instance()->GetTimecodeDisplay(),
+			display_time, timebase_, App::instance()->GetTimecodeDisplay(),
 			false));
 
 		last_used_tip_format_ = tip_format;

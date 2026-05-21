@@ -73,7 +73,7 @@ void RecordTool::MouseMove(TimelineViewMouseEvent *event)
 	// Snap movement
 	bool snapped;
 
-	if (Core::instance()->snapping()) {
+	if (App::instance()->snapping()) {
 		snapped = parent()->SnapPoint(snap_points_, &movement);
 	} else {
 		snapped = false;

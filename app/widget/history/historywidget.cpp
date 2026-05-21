@@ -29,7 +29,7 @@ namespace olive
 HistoryWidget::HistoryWidget(QWidget *parent)
 	: QTreeView(parent)
 {
-	stack_ = Core::instance()->undo_stack();
+	stack_ = App::instance()->undo_stack();
 
 	this->setModel(stack_);
 	this->setRootIsDecorated(false);

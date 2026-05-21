@@ -38,7 +38,7 @@ void BeamTool::HoverMove(TimelineViewMouseEvent *event)
 
 TimelineCoordinate BeamTool::ValidatedCoordinate(TimelineCoordinate coord)
 {
-	if (Core::instance()->snapping()) {
+	if (App::instance()->snapping()) {
 		rational movement;
 		parent()->SnapPoint({ coord.GetFrame() }, &movement);
 		if (!movement.isNull()) {

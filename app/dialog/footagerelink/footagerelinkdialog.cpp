@@ -111,7 +111,7 @@ void FootageRelinkDialog::BrowseForFootage()
 
 	QString new_fn = QFileDialog::getOpenFileName(
 		this, tr("Relink \"%1\"").arg(f->GetLabel()), info.absolutePath(),
-		Core::FootageFileDialogFilter());
+		App::FootageFileDialogFilter());
 
 	// Originally, this function would attempt to filter to the exact filename of the missing file.
 	// However, this would break on Windows if the filename had any spaces in it. The reason is
@@ -124,7 +124,7 @@ void FootageRelinkDialog::BrowseForFootage()
 
 	// We received a new filename
 	if (!new_fn.isEmpty()) {
-		if (!Core::IsFootageExtensionAllowed(new_fn)) {
+		if (!App::IsFootageExtensionAllowed(new_fn)) {
 			QMessageBox::warning(
 				this, tr("Unsupported media"),
 				tr("This file type is not allowed by the current media type "

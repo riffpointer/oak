@@ -169,7 +169,7 @@ PlaybackControls::PlaybackControls(QWidget *parent)
 
 	SetAudioVideoDragButtonsVisible(false);
 
-	connect(Core::instance(), &Core::TimecodeDisplayChanged, this,
+	connect(App::instance(), &App::TimecodeDisplayChanged, this,
 			&PlaybackControls::TimecodeChanged);
 
 	play_blink_timer_ = new QTimer(this);
@@ -215,7 +215,7 @@ void PlaybackControls::SetEndTime(const rational &r)
 	end_time_ = r;
 
 	end_tc_lbl_->setText(QString::fromStdString(Timecode::time_to_timecode(
-		end_time_, time_base_, Core::instance()->GetTimecodeDisplay())));
+		end_time_, time_base_, App::instance()->GetTimecodeDisplay())));
 }
 
 void PlaybackControls::ShowPauseButton()

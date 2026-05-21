@@ -50,33 +50,33 @@ set(OLIVE_RESOURCES
 )
 
 # Add version object
-add_library(olive-version-obj
+add_library(oak-version-obj
   OBJECT
   version.cpp
   version.h
 )
-target_link_libraries(olive-version-obj PRIVATE Qt${QT_VERSION_MAJOR}::Core)
-target_compile_options(olive-version-obj PRIVATE -DAPPVERSION="${PROJECT_VERSION}" -DAPPVERSIONLONG="${PROJECT_LONG_VERSION}" )
+target_link_libraries(oak-version-obj PRIVATE Qt${QT_VERSION_MAJOR}::Core)
+target_compile_options(oak-version-obj PRIVATE -DAPPVERSION="${PROJECT_VERSION}" -DAPPVERSIONLONG="${PROJECT_LONG_VERSION}" )
 
 # Add main library
-add_library(libolive-editor
+add_library(liboak-editor
   OBJECT
   ${OLIVE_SOURCES}
   ${OLIVE_RESOURCES}
 )
 add_subdirectory(common)
 
-target_compile_features(libolive-editor PUBLIC cxx_std_23)
+target_compile_features(liboak-editor PUBLIC cxx_std_23)
 include_directories(../third_party/openfx/include
         ../third_party/openfx/HostSupport/include)
-# Remove prefix - prevents CMake calling it "liblibolive-editor"
-set_target_properties(libolive-editor PROPERTIES PREFIX "")
+# Remove prefix - prevents CMake calling it "libliboak-editor"
+set_target_properties(liboak-editor PROPERTIES PREFIX "")
 
 # Add application
-add_executable(olive-editor
+add_executable(oak-editor
   main.cpp
-  $<TARGET_OBJECTS:libolive-editor>
-  $<TARGET_OBJECTS:olive-version-obj>
+  $<TARGET_OBJECTS:liboak-editor>
+  $<TARGET_OBJECTS:oak-version-obj>
 )
 # Create docs if doxygen was found
 if(DOXYGEN_FOUND)
@@ -90,7 +90,7 @@ endif()
 # Platform-specific deployment preferences
 if (WIN32)
   # Set Windows application icon
-  target_sources(olive-editor PRIVATE packaging/windows/resources.rc)
+  target_sources(oak-editor PRIVATE packaging/windows/resources.rc)
 
   # Preserve folder structure in visual studio
   source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${OLIVE_SOURCES})
@@ -98,10 +98,10 @@ if (WIN32)
 elseif(APPLE)
   # Set Mac application icon
   set(OLIVE_ICON packaging/macos/olive.icns)
-  target_sources(olive-editor PRIVATE ${OLIVE_ICON})
+  target_sources(oak-editor PRIVATE ${OLIVE_ICON})
 
   # Set Mac bundle properties
-  set_target_properties(olive-editor PROPERTIES
+  set_target_properties(oak-editor PROPERTIES
     MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/packaging/macos/MacOSXBundleInfo.plist.in
     MACOSX_BUNDLE_GUI_IDENTIFIER org.oakvideoeditor.Oak
@@ -116,24 +116,24 @@ elseif(APPLE)
   )
 elseif(UNIX)
   # Set Linux-specific properties for application
-  install(TARGETS olive-editor RUNTIME DESTINATION bin)
+  install(TARGETS oak-editor RUNTIME DESTINATION bin)
 endif()
 
 # Set link libraries
-target_link_libraries(olive-editor PRIVATE ${OLIVE_LIBRARIES} oliveengine)
-target_link_libraries(libolive-editor PRIVATE ${OLIVE_LIBRARIES} oliveengine)
+target_link_libraries(oak-editor PRIVATE ${OLIVE_LIBRARIES} oakengine)
+target_link_libraries(liboak-editor PRIVATE ${OLIVE_LIBRARIES} oakengine)
 
 # Set compile options
-target_compile_options(olive-editor PRIVATE ${OLIVE_COMPILE_OPTIONS})
-target_compile_options(libolive-editor PRIVATE ${OLIVE_COMPILE_OPTIONS})
+target_compile_options(oak-editor PRIVATE ${OLIVE_COMPILE_OPTIONS})
+target_compile_options(liboak-editor PRIVATE ${OLIVE_COMPILE_OPTIONS})
 
 # Set global definitions
-target_compile_definitions(olive-editor PRIVATE ${OLIVE_DEFINITIONS})
-target_compile_definitions(libolive-editor PRIVATE ${OLIVE_DEFINITIONS})
+target_compile_definitions(oak-editor PRIVATE ${OLIVE_DEFINITIONS})
+target_compile_definitions(liboak-editor PRIVATE ${OLIVE_DEFINITIONS})
 
 # Set include dirs
-target_include_directories(olive-editor PRIVATE ${OLIVE_INCLUDE_DIRS})
-target_include_directories(libolive-editor PRIVATE ${OLIVE_INCLUDE_DIRS})
+target_include_directories(oak-editor PRIVATE ${OLIVE_INCLUDE_DIRS})
+target_include_directories(liboak-editor PRIVATE ${OLIVE_INCLUDE_DIRS})
 
 # Add crash handler
 if (GoogleCrashpad_FOUND AND Qt${QT_VERSION_MAJOR}Network_FOUND)

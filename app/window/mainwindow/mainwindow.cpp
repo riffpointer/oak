@@ -483,7 +483,7 @@ void MainWindow::SelectFootage(const QVector<Footage *> &e)
 void MainWindow::closeEvent(QCloseEvent *e)
 {
 	// Try to close all projects (this will return false if the user chooses not to close)
-	if (!Core::instance()->CloseProject(false)) {
+	if (!App::instance()->CloseProject(false)) {
 		e->ignore();
 		return;
 	}
@@ -574,7 +574,7 @@ void MainWindow::RevealViewerInFootageViewer(ViewerOutput *r,
 			r->project(), r->GetWorkArea(), true));
 	}
 	command->add_child(new WorkareaSetRangeCommand(r->GetWorkArea(), range));
-	Core::instance()->undo_stack()->push(command, tr("Set Footage Workarea"));
+	App::instance()->undo_stack()->push(command, tr("Set Footage Workarea"));
 
 	r->SetPlayhead(range.in());
 }
@@ -593,12 +593,12 @@ void MainWindow::ShowNouveauWarning()
 
 void MainWindow::UpdateTitle()
 {
-	if (Core::instance()->GetActiveProject()) {
+	if (App::instance()->GetActiveProject()) {
 		setWindowTitle(
 			QStringLiteral("%1 %2 - [*]%3")
 				.arg(QApplication::applicationName(),
 					 QApplication::applicationVersion(),
-					 Core::instance()->GetActiveProject()->pretty_filename()));
+					 App::instance()->GetActiveProject()->pretty_filename()));
 	} else {
 		setWindowTitle(
 			QStringLiteral("%1 %2").arg(QApplication::applicationName(),
@@ -938,7 +938,7 @@ void MainWindow::showEvent(QShowEvent *e)
 	QMainWindow::showEvent(e);
 
 	if (first_show_) {
-		QMetaObject::invokeMethod(Core::instance(), "CheckForAutoRecoveries",
+		QMetaObject::invokeMethod(App::instance(), "CheckForAutoRecoveries",
 								  Qt::QueuedConnection);
 
 #ifdef Q_OS_LINUX

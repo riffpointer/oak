@@ -27,8 +27,8 @@ struct AppCallbacks {
 	void (*warn_cache_full)(void) = nullptr;
 };
 
-void SetAppCallbacks(const AppCallbacks* callbacks);
-const AppCallbacks* GetAppCallbacks();
+void oak_set_app_callbacks(const AppCallbacks* callbacks);
+const AppCallbacks* oak_get_app_callbacks();
 
 }
 

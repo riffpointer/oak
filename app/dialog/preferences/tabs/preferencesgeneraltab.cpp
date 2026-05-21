@@ -162,8 +162,8 @@ PreferencesGeneralTab::PreferencesGeneralTab()
 
 		QPushButton *browse_autorecoveries =
 			new QPushButton(tr("Browse Auto-Recoveries"));
-		connect(browse_autorecoveries, &QPushButton::clicked, Core::instance(),
-				&Core::BrowseAutoRecoveries);
+		connect(browse_autorecoveries, &QPushButton::clicked, App::instance(),
+				&App::BrowseAutoRecoveries);
 		autorecovery_layout->addWidget(browse_autorecoveries, row, 1);
 	}
 
@@ -190,7 +190,7 @@ void PreferencesGeneralTab::Accept(MultiUndoCommand *command)
 	// If the language has changed, set it now
 	if (OLIVE_CONFIG("Language").toString() != set_language) {
 		OLIVE_CONFIG("Language") = set_language;
-		Core::instance()->SetLanguage(
+		App::instance()->SetLanguage(
 			set_language.isEmpty() ? QLocale::system().name() : set_language);
 	}
 
@@ -199,7 +199,7 @@ void PreferencesGeneralTab::Accept(MultiUndoCommand *command)
 		QVariant::fromValue(autorecovery_interval_->GetValue());
 	OLIVE_CONFIG("AutorecoveryMaximum") =
 		QVariant::fromValue(autorecovery_maximum_->GetValue());
-	Core::instance()->SetAutorecoveryInterval(
+	App::instance()->SetAutorecoveryInterval(
 		autorecovery_interval_->GetValue());
 }
 

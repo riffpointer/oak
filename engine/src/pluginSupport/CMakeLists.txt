@@ -1,4 +1,4 @@
-target_sources(libolive-editor PRIVATE
+target_sources(liboak-editor PRIVATE
         OliveHost.h
         OliveHost.cpp
         OlivePluginInstance.h

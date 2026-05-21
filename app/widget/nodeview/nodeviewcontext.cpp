@@ -56,10 +56,10 @@ NodeViewContext::NodeViewContext(Node *context, QGraphicsItem *item)
 						 block->track()->type()),
 					 QString::fromStdString(Timecode::time_to_timecode(
 						 block->in(), timebase,
-						 Core::instance()->GetTimecodeDisplay())),
+						 App::instance()->GetTimecodeDisplay())),
 					 QString::fromStdString(Timecode::time_to_timecode(
 						 block->out(), timebase,
-						 Core::instance()->GetTimecodeDisplay())));
+						 App::instance()->GetTimecodeDisplay())));
 	} else {
 		lbl_ = context_->GetLabelAndName();
 	}

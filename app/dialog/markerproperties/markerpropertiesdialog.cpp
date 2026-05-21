@@ -159,7 +159,7 @@ void MarkerPropertiesDialog::accept()
 			TimeRange(in_slider_->GetValue(), out_slider_->GetValue())));
 	}
 
-	Core::instance()->undo_stack()->push(command, tr("Set Marker Properties"));
+	App::instance()->undo_stack()->push(command, tr("Set Marker Properties"));
 
 	super::accept();
 }

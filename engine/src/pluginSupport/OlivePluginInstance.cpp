@@ -122,7 +122,7 @@ private:
 
 ViewerOutput *GetActiveViewerOutput()
 {
-	if (auto *cb = GetAppCallbacks()) {
+	if (auto *cb = oak_get_app_callbacks()) {
 		return cb->get_active_viewer_output ? cb->get_active_viewer_output() : nullptr;
 	}
 	return nullptr;
@@ -376,7 +376,7 @@ OfxStatus OlivePluginInstance::editEnd()
 					"OlivePluginInstance", "Edit Parameters");
 			}
 		}
-		if (auto *cb = GetAppCallbacks()) {
+		if (auto *cb = oak_get_app_callbacks()) {
 			if (auto *stack = cb->get_undo_stack()) {
 				stack->push(edit_command_, label);
 			}
@@ -416,7 +416,7 @@ void OlivePluginInstance::SubmitUndoCommand(UndoCommand *command,
 		return;
 	}
 
-	if (auto *cb = GetAppCallbacks()) {
+	if (auto *cb = oak_get_app_callbacks()) {
 		if (auto *stack = cb->get_undo_stack()) {
 			stack->push(command, label);
 		}
@@ -430,7 +430,7 @@ void OlivePluginInstance::progressStart(const std::string &message,
 	progress_cancelled_ = false;
 	progress_active_ = true;
 
-	if (auto *cb = GetAppCallbacks()) {
+	if (auto *cb = oak_get_app_callbacks()) {
 		if (cb->progress_end && progress_handle_) {
 			cb->progress_end(progress_handle_);
 		}
@@ -445,7 +445,7 @@ void OlivePluginInstance::progressEnd()
 	progress_active_ = false;
 	progress_cancelled_ = false;
 
-	if (auto *cb = GetAppCallbacks()) {
+	if (auto *cb = oak_get_app_callbacks()) {
 		if (cb->progress_end && progress_handle_) {
 			cb->progress_end(progress_handle_);
 		}
@@ -459,7 +459,7 @@ bool OlivePluginInstance::progressUpdate(double t)
 		return true;
 	}
 
-	if (auto *cb = GetAppCallbacks()) {
+	if (auto *cb = oak_get_app_callbacks()) {
 		if (cb->progress_update && progress_handle_) {
 			cb->progress_update(progress_handle_, qBound(0.0, t, 1.0));
 		}

@@ -50,12 +50,12 @@ class MainWindow;
  * The "public slots" are usually user-triggered actions and can be connected to UI elements (e.g. creating a folder,
  * opening the import dialog, etc.)
  */
-class Core : public QObject {
+class App : public QObject {
 	Q_OBJECT
 public:
-	class CoreParams {
+	class AppParams {
 	public:
-		CoreParams();
+		AppParams();
 
 		enum RunMode { kRunNormal, kHeadlessExport, kHeadlessPreCache };
 
@@ -289,7 +289,7 @@ public:
 	/**
    * @brief Show message in main window's status bar
    *
-   * Shorthand for Core::instance()->main_window()->statusBar()->showMessage();
+   * Shorthand for App::instance()->main_window()->statusBar()->showMessage();
    */
 	void ShowStatusBarMessage(const QString &s, int timeout = 0);
 

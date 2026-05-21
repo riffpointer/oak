@@ -129,7 +129,7 @@ void SeekableWidget::DeleteSelected()
 			command->add_child(new MarkerRemoveCommand(marker));
 		}
 
-		Core::instance()->undo_stack()->push(
+		App::instance()->undo_stack()->push(
 			command, tr("Deleted %1 Marker(s)")
 						 .arg(selection_manager_.GetSelectedObjects().size()));
 	}
@@ -183,7 +183,7 @@ bool SeekableWidget::PasteMarkers()
 				command->add_child(new MarkerAddCommand(markers_, m));
 			}
 
-			Core::instance()->undo_stack()->push(
+			App::instance()->undo_stack()->push(
 				command, tr("Pasted %1 Marker(s)").arg(markers.size()));
 			return true;
 		}
@@ -271,7 +271,7 @@ void SeekableWidget::mouseReleaseEvent(QMouseEvent *event)
 	if (selection_manager_.IsDragging()) {
 		MultiUndoCommand *command = new MultiUndoCommand();
 		selection_manager_.DragStop(command);
-		Core::instance()->undo_stack()->push(
+		App::instance()->undo_stack()->push(
 			command, tr("Moved %1 Marker(s)")
 						 .arg(selection_manager_.GetSelectedObjects().size()));
 	}
@@ -395,7 +395,7 @@ void SeekableWidget::SetMarkerColor(int c)
 		command->add_child(new MarkerChangeColorCommand(marker, c));
 	}
 
-	Core::instance()->undo_stack()->push(
+	App::instance()->undo_stack()->push(
 		command, tr("Changed Color of %1 Marker(s)")
 					 .arg(selection_manager_.GetSelectedObjects().size()));
 }
@@ -423,7 +423,7 @@ void SeekableWidget::SeekToScenePoint(qreal scene)
 
 	rational playhead_time = qMax(rational(0), SceneToTime(scene));
 
-	if (Core::instance()->snapping() && GetSnapService()) {
+	if (App::instance()->snapping() && GetSnapService()) {
 		rational movement;
 
 		GetSnapService()->SnapPoint({ playhead_time }, &movement,
@@ -609,7 +609,7 @@ void SeekableWidget::DragResizeHandle(const QPointF &scene)
 
 	rational presnap_time = proposed_time;
 
-	if (Core::instance()->snapping() && GetSnapService()) {
+	if (App::instance()->snapping() && GetSnapService()) {
 		rational movement;
 
 		GetSnapService()->SnapPoint({ proposed_time }, &movement,
@@ -668,7 +668,7 @@ void SeekableWidget::CommitResizeHandle()
 		command_name = tr("Changed Workarea Length");
 	}
 
-	Core::instance()->undo_stack()->push(command, command_name);
+	App::instance()->undo_stack()->push(command, command_name);
 }
 
 }

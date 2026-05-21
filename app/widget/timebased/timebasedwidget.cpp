@@ -620,7 +620,7 @@ void TimeBasedWidget::SetPoint(Timeline::MovementMode m, const rational &time)
 	command->add_child(
 		new WorkareaSetRangeCommand(points, TimeRange(in_point, out_point)));
 
-	Core::instance()->undo_stack()->push(command, tr("Set In/Out Point"));
+	App::instance()->undo_stack()->push(command, tr("Set In/Out Point"));
 }
 
 void TimeBasedWidget::ResetPoint(Timeline::MovementMode m)
@@ -643,7 +643,7 @@ void TimeBasedWidget::ResetPoint(Timeline::MovementMode m)
 		r.set_out(TimelineWorkArea::kResetOut);
 	}
 
-	Core::instance()->undo_stack()->push(new WorkareaSetRangeCommand(points, r),
+	App::instance()->undo_stack()->push(new WorkareaSetRangeCommand(points, r),
 										 tr("Reset In/Out Points"));
 }
 
@@ -716,7 +716,7 @@ void TimeBasedWidget::ClearInOutPoints()
 		return;
 	}
 
-	Core::instance()->undo_stack()->push(
+	App::instance()->undo_stack()->push(
 		new WorkareaSetEnabledCommand(GetConnectedNode()->project(),
 									  GetConnectedNode()->GetWorkArea(), false),
 		tr("Cleared In/Out Points"));
@@ -760,7 +760,7 @@ void TimeBasedWidget::SetMarker()
 		}
 
 		if (marker) {
-			Core::instance()->undo_stack()->push(
+			App::instance()->undo_stack()->push(
 				new MarkerAddCommand(markers, marker), tr("Added Marker"));
 		}
 	}

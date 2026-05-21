@@ -51,7 +51,7 @@ void SubmitUndoCommand(const std::shared_ptr<PluginNode> &node,
 		return;
 	}
 
-	if (auto *cb = GetAppCallbacks()) {
+	if (auto *cb = oak_get_app_callbacks()) {
 		if (auto *stack = cb->get_undo_stack()) {
 			stack->push(command, label);
 		}

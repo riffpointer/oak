@@ -61,7 +61,7 @@ public slots:
    * @brief Set the tool to be displayed as "selected"
    *
    * This function does not set the application-wide tool, it only sets which tool show as selected in this widget.
-   * It's recommended to use this function only as a slot connected to Core::ToolChanged() so that it automatically
+   * It's recommended to use this function only as a slot connected to App::ToolChanged() so that it automatically
    * updates whenever the application-wide tool is changed.
    *
    * @param tool

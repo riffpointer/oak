@@ -51,7 +51,7 @@ void AddTool::MousePress(TimelineViewMouseEvent *event)
 
 	Track::Type add_type = Track::kNone;
 
-	switch (Core::instance()->GetSelectedAddableObject()) {
+	switch (App::instance()->GetSelectedAddableObject()) {
 	case Tool::kAddableBars:
 	case Tool::kAddableSolid:
 	case Tool::kAddableTitle:
@@ -110,7 +110,7 @@ void AddTool::MouseRelease(TimelineViewMouseEvent *event)
 			Sequence *s = parent()->sequence();
 
 			QRectF r;
-			if (Core::instance()->GetSelectedAddableObject() ==
+			if (App::instance()->GetSelectedAddableObject() ==
 				Tool::kAddableTitle) {
 				VideoParams svp = s->GetVideoParams();
 				r = QRectF(0, 0, svp.width(), svp.height());
@@ -122,7 +122,7 @@ void AddTool::MouseRelease(TimelineViewMouseEvent *event)
 							  ghost_->GetAdjustedIn(),
 							  ghost_->GetAdjustedLength(), r);
 
-			Core::instance()->undo_stack()->push(
+			App::instance()->undo_stack()->push(
 				command, qApp->translate("AddTool", "Added Clip"));
 		}
 
@@ -138,13 +138,13 @@ Node *AddTool::CreateAddableClip(MultiUndoCommand *command, Sequence *sequence,
 								 const QRectF &rect)
 {
 	ClipBlock *clip;
-	if (Core::instance()->GetSelectedAddableObject() ==
+	if (App::instance()->GetSelectedAddableObject() ==
 		Tool::kAddableSubtitle) {
 		clip = new SubtitleBlock();
 	} else {
 		clip = new ClipBlock();
 		clip->SetLabel(olive::Tool::GetAddableObjectName(
-			Core::instance()->GetSelectedAddableObject()));
+			App::instance()->GetSelectedAddableObject()));
 	}
 	clip->set_length_and_media_out(length);
 
@@ -157,7 +157,7 @@ Node *AddTool::CreateAddableClip(MultiUndoCommand *command, Sequence *sequence,
 
 	Node *node_to_add = nullptr;
 
-	switch (Core::instance()->GetSelectedAddableObject()) {
+	switch (App::instance()->GetSelectedAddableObject()) {
 	case Tool::kAddableEmpty:
 		// Empty, nothing to be done
 		break;
@@ -174,7 +174,7 @@ Node *AddTool::CreateAddableClip(MultiUndoCommand *command, Sequence *sequence,
 	case Tool::kAddableTone:
 		// Not implemented yet
 		qWarning() << "Unimplemented add object:"
-				   << Core::instance()->GetSelectedAddableObject();
+				   << App::instance()->GetSelectedAddableObject();
 		break;
 	case Tool::kAddableSubtitle:
 		// The block itself is the node we want
@@ -217,7 +217,7 @@ void AddTool::MouseMoveInternal(const rational &cursor_frame, bool outwards)
 	// Snap movement
 	bool snapped;
 
-	if (Core::instance()->snapping()) {
+	if (App::instance()->snapping()) {
 		snapped = parent()->SnapPoint(snap_points_, &movement);
 	} else {
 		snapped = false;

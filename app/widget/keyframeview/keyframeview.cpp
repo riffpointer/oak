@@ -64,7 +64,7 @@ void KeyframeView::DeleteSelected()
 			command->add_child(new NodeParamRemoveKeyframeCommand(key));
 		}
 
-		Core::instance()->undo_stack()->push(
+		App::instance()->undo_stack()->push(
 			command,
 			tr("Deleted %1 Keyframe(s)").arg(GetSelectedKeyframes().size()));
 	}
@@ -271,7 +271,7 @@ bool KeyframeView::Paste(
 			}
 		}
 
-		Core::instance()->undo_stack()->push(
+		App::instance()->undo_stack()->push(
 			command, tr("Pasted %1 Keyframe(s)").arg(keys.size()));
 		return true;
 	}
@@ -346,7 +346,7 @@ void KeyframeView::mouseReleaseEvent(QMouseEvent *event)
 		MultiUndoCommand *command = new MultiUndoCommand();
 		selection_manager_.DragStop(command);
 		KeyframeDragRelease(event, command);
-		Core::instance()->undo_stack()->push(
+		App::instance()->undo_stack()->push(
 			command, tr("Moved %1 Keyframe(s)")
 						 .arg(selection_manager_.GetSelectedObjects().size()));
 	} else if (selection_manager_.IsRubberBanding()) {
@@ -649,7 +649,7 @@ void KeyframeView::ShowContextMenu()
 			foreach (NodeKeyframe *item, GetSelectedKeyframes()) {
 				command->add_child(new KeyframeSetTypeCommand(item, new_type));
 			}
-			Core::instance()->undo_stack()->push(
+			App::instance()->undo_stack()->push(
 				command, tr("Set Type of %1 Keyframe(s)")
 							 .arg(GetSelectedKeyframes().size()));
 		}

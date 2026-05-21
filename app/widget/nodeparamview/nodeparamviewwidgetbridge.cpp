@@ -229,7 +229,7 @@ void NodeParamViewWidgetBridge::SetInputValue(const QVariant &value, int track)
 
 	SetInputValueInternal(value, track, command, true);
 
-	Core::instance()->undo_stack()->push(command, GetCommandName());
+	App::instance()->undo_stack()->push(command, GetCommandName());
 }
 
 void NodeParamViewWidgetBridge::SetInputValueInternal(
@@ -262,7 +262,7 @@ void NodeParamViewWidgetBridge::ProcessSlider(NumericSliderBase *slider,
 
 		MultiUndoCommand *command = new MultiUndoCommand();
 		dragger_.End(command);
-		Core::instance()->undo_stack()->push(command, GetCommandName());
+		App::instance()->undo_stack()->push(command, GetCommandName());
 
 	} else {
 		// No drag was involved, we can just push the value
@@ -362,7 +362,7 @@ void NodeParamViewWidgetBridge::WidgetCallback()
 				c.color_output().look());
 			n->blockSignals(false);
 
-			Core::instance()->undo_stack()->push(command,
+			App::instance()->undo_stack()->push(command,
 											 GetCommandName());
 		}
 		break;

@@ -57,7 +57,7 @@ TimeRuler::TimeRuler(bool text_visible, bool cache_status_visible,
 	UpdateHeight();
 
 	// Force update if the default timecode display mode changes
-	connect(Core::instance(), &Core::TimecodeDisplayChanged, this,
+	connect(App::instance(), &App::TimecodeDisplayChanged, this,
 			static_cast<void (TimeRuler::*)()>(&TimeRuler::update));
 
 	// Connect context menu
@@ -219,7 +219,7 @@ void TimeRuler::drawForeground(QPainter *p, const QRectF &rect)
 					QString timecode_str =
 						QString::fromStdString(Timecode::time_to_timecode(
 							SceneToTime(i), timebase(),
-							Core::instance()->GetTimecodeDisplay()));
+							App::instance()->GetTimecodeDisplay()));
 					int timecode_width =
 						QtUtils::QFontMetricsWidth(fm, timecode_str);
 					int timecode_left;

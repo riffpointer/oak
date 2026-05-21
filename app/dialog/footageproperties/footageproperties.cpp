@@ -201,7 +201,7 @@ void FootagePropertiesDialog::accept()
 			->Accept(command);
 	}
 
-	Core::instance()->undo_stack()->push(
+	App::instance()->undo_stack()->push(
 		command, tr("Set Footage \"%1\" Properties").arg(footage_->GetLabel()));
 
 	QDialog::accept();

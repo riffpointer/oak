@@ -232,7 +232,7 @@ void KeyframePropertiesDialog::accept()
 		}
 	}
 
-	Core::instance()->undo_stack()->push(command,
+	App::instance()->undo_stack()->push(command,
 										 tr("Set Keyframe Properties"));
 
 	QDialog::accept();

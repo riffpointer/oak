@@ -34,7 +34,7 @@ RationalSlider::RationalSlider(QWidget *parent)
 	: super(parent)
 	, lock_display_type_(false)
 {
-	connect(Core::instance(), &Core::TimecodeDisplayChanged, this,
+	connect(App::instance(), &App::TimecodeDisplayChanged, this,
 			&RationalSlider::UpdateLabel);
 	connect(SliderBase::label(), &SliderLabel::customContextMenuRequested, this,
 			&RationalSlider::ShowDisplayTypeMenu);
@@ -111,7 +111,7 @@ QString RationalSlider::ValueToString(const QVariant &v) const
 		switch (display_type_) {
 		case kRationalTime:
 			return QString::fromStdString(Timecode::time_to_timecode(
-				r, timebase_, Core::instance()->GetTimecodeDisplay()));
+				r, timebase_, App::instance()->GetTimecodeDisplay()));
 		case kRationalFloat:
 			return FloatToString(val, GetDecimalPlaces(),
 								 GetAutoTrimDecimalPlaces());
@@ -131,7 +131,7 @@ QVariant RationalSlider::StringToValue(const QString &s, bool *ok) const
 	switch (display_type_) {
 	case kRationalTime: {
 		r = Timecode::timecode_to_time(s.toStdString(), timebase_,
-									   Core::instance()->GetTimecodeDisplay(),
+									   App::instance()->GetTimecodeDisplay(),
 									   ok);
 		break;
 	}

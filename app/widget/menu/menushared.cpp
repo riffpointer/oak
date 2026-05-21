@@ -36,13 +36,13 @@ MenuShared *MenuShared::instance_ = nullptr;
 MenuShared::MenuShared()
 {
 	// "New" menu shared items
-	new_project_item_ = Menu::CreateItem(this, "newproj", Core::instance(),
-										 &Core::CreateNewProject, tr("Ctrl+N"));
-	new_sequence_item_ = Menu::CreateItem(this, "newseq", Core::instance(),
-										  &Core::CreateNewSequence,
+	new_project_item_ = Menu::CreateItem(this, "newproj", App::instance(),
+										 &App::CreateNewProject, tr("Ctrl+N"));
+	new_sequence_item_ = Menu::CreateItem(this, "newseq", App::instance(),
+										  &App::CreateNewSequence,
 										  tr("Ctrl+Shift+N"));
-	new_folder_item_ = Menu::CreateItem(this, "newfolder", Core::instance(),
-										&Core::CreateNewFolder);
+	new_folder_item_ = Menu::CreateItem(this, "newfolder", App::instance(),
+										&App::CreateNewFolder);
 
 	// "Edit" menu shared items
 	edit_cut_item_ = Menu::CreateItem(this, "cut", this,
@@ -172,8 +172,8 @@ void MenuShared::AddItemsForNewMenu(Menu *m)
 
 void MenuShared::AddItemsForEditMenu(Menu *m, bool for_clips)
 {
-	m->addAction(Core::instance()->undo_stack()->GetUndoAction());
-	m->addAction(Core::instance()->undo_stack()->GetRedoAction());
+	m->addAction(App::instance()->undo_stack()->GetUndoAction());
+	m->addAction(App::instance()->undo_stack()->GetRedoAction());
 
 	m->addSeparator();
 
@@ -203,7 +203,7 @@ void MenuShared::AddItemsForAddableObjectsMenu(Menu *m)
 {
 	for (QAction *a : qAsConst(addable_items_)) {
 		a->setChecked((a->data().toInt() ==
-					   Core::instance()->GetSelectedAddableObject()));
+					   App::instance()->GetSelectedAddableObject()));
 		m->addAction(a);
 	}
 }
@@ -245,7 +245,7 @@ void MenuShared::AboutToShowTimeRulerActions(const rational &timebase)
 	QList<QAction *> timecode_display_actions =
 		frame_view_mode_group_->actions();
 	Timecode::Display current_timecode_display =
-		Core::instance()->GetTimecodeDisplay();
+		App::instance()->GetTimecodeDisplay();
 
 	// Only show the drop-frame option if the timebase is drop-frame
 	view_timecode_view_dropframe_item_->setVisible(
@@ -379,7 +379,7 @@ void MenuShared::TimecodeDisplayTriggered()
 		static_cast<Timecode::Display>(action->data().toInt());
 
 	// Set the current display mode
-	Core::instance()->SetTimecodeDisplay(display);
+	App::instance()->SetTimecodeDisplay(display);
 }
 
 void MenuShared::ColorLabelTriggered(int color_index)
@@ -401,8 +401,8 @@ void MenuShared::AddableItemTriggered()
 {
 	QAction *a = static_cast<QAction *>(sender());
 	Tool::AddableObject i = static_cast<Tool::AddableObject>(a->data().toInt());
-	Core::instance()->SetTool(Tool::kAdd);
-	Core::instance()->SetSelectedAddableObject(i);
+	App::instance()->SetTool(Tool::kAdd);
+	App::instance()->SetSelectedAddableObject(i);
 }
 
 void MenuShared::Retranslate()

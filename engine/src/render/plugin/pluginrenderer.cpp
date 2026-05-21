@@ -1294,7 +1294,7 @@ static void MarkRenderFailure(olive::TexturePtr destination)
 /// Show an error dialog and undo the last operation. Must be called from the GUI thread.
 static void ShowErrorDialogAndUndo(const QString &message)
 {
-	if (auto *cb = olive::GetAppCallbacks()) {
+	if (auto *cb = olive::oak_get_app_callbacks()) {
 		if (auto *stack = cb->get_undo_stack()) {
 			if (stack->CanUndo()) {
 				stack->undo();

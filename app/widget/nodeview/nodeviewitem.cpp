@@ -351,7 +351,7 @@ void NodeViewItem::paint(QPainter *painter,
 {
 	// Use main window palette since the palette passed in `widget` is the NodeView palette which
 	// has been slightly modified
-	QPalette app_pal = Core::instance()->main_window()->palette();
+	QPalette app_pal = App::instance()->main_window()->palette();
 
 	// We only draw a single unit's worth
 	QRectF single_unit_rect = rect();

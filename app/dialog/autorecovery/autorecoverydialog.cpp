@@ -50,7 +50,7 @@ void AutoRecoveryDialog::accept()
 	foreach (QTreeWidgetItem *checkable, checkable_items_) {
 		if (checkable->checkState(0) == Qt::Checked) {
 			QString filename = checkable->data(0, kFilenameRole).toString();
-			Core::instance()->OpenRecoveryProject(filename);
+			App::instance()->OpenRecoveryProject(filename);
 		}
 	}
 

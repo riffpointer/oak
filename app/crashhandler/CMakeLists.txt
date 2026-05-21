@@ -19,7 +19,7 @@ add_executable(
   olive-crashhandler
   crashhandler.cpp
   crashhandler.h
-  $<TARGET_OBJECTS:olive-version-obj>
+  $<TARGET_OBJECTS:oak-version-obj>
 )
 
 # Disable console appearing on crash handler dialog
@@ -52,9 +52,9 @@ set(MINIDUMP_STACKWALK "minidump_stackwalk${CMAKE_EXECUTABLE_SUFFIX}")
 if(APPLE)
   # Move crash handler executables inside Mac app bundle
   add_custom_command(TARGET olive-crashhandler POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different olive-crashhandler $<TARGET_FILE_DIR:olive-editor>
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CRASHPAD_LIBRARY_DIRS}/${CRASHPAD_HANDLER} $<TARGET_FILE_DIR:olive-editor>
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${BREAKPAD_BIN_DIR}/${MINIDUMP_STACKWALK} $<TARGET_FILE_DIR:olive-editor>
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different olive-crashhandler $<TARGET_FILE_DIR:oak-editor>
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CRASHPAD_LIBRARY_DIRS}/${CRASHPAD_HANDLER} $<TARGET_FILE_DIR:oak-editor>
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${BREAKPAD_BIN_DIR}/${MINIDUMP_STACKWALK} $<TARGET_FILE_DIR:oak-editor>
   )
 elseif(UNIX)
   install(TARGETS olive-crashhandler RUNTIME DESTINATION bin)

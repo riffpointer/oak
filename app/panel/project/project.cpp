@@ -53,8 +53,8 @@ ProjectPanel::ProjectPanel(const QString &unique_name)
 	// Make toolbar connections
 	connect(toolbar, &ProjectToolbar::NewClicked, this,
 			&ProjectPanel::ShowNewMenu);
-	connect(toolbar, &ProjectToolbar::OpenClicked, Core::instance(),
-			&Core::OpenProject);
+	connect(toolbar, &ProjectToolbar::OpenClicked, App::instance(),
+			&App::OpenProject);
 	connect(toolbar, &ProjectToolbar::SaveClicked, this,
 			&ProjectPanel::SaveConnectedProject);
 
@@ -174,7 +174,7 @@ void ProjectPanel::ItemDoubleClickSlot(Node *item)
 {
 	if (item == nullptr) {
 		// If the user double clicks on empty space, show the import dialog
-		Core::instance()->DialogImportShow();
+		App::instance()->DialogImportShow();
 	} else if (dynamic_cast<Footage *>(item)) {
 		// Open this footage in a FootageViewer
 		auto panel =
@@ -184,7 +184,7 @@ void ProjectPanel::ItemDoubleClickSlot(Node *item)
 		panel->setFocus(Qt::FocusReason::MouseFocusReason);
 	} else if (dynamic_cast<Sequence *>(item)) {
 		// Open this sequence in the Timeline
-		Core::instance()->main_window()->OpenSequence(
+		App::instance()->main_window()->OpenSequence(
 			static_cast<Sequence *>(item));
 	}
 }
@@ -226,7 +226,7 @@ void ProjectPanel::UpdateSubtitle()
 
 void ProjectPanel::SaveConnectedProject()
 {
-	Core::instance()->SaveProject();
+	App::instance()->SaveProject();
 }
 
 QVector<ViewerOutput *> ProjectPanel::GetSelectedFootage() const

@@ -591,7 +591,7 @@ void PointerTool::ProcessDrag(const TimelineCoordinate &mouse_pos)
 	time_movement = ValidateOutTrimming(time_movement);
 
 	// Perform snapping if enabled (adjusts time_movement if it's close to any potential snap points)
-	if (Core::instance()->snapping()) {
+	if (App::instance()->snapping()) {
 		parent()->SnapPoint(snap_points_, &time_movement);
 
 		time_movement = ValidateTimeMovement(time_movement);
@@ -648,7 +648,7 @@ void PointerTool::ProcessDrag(const TimelineCoordinate &mouse_pos)
 	QToolTip::showText(QCursor::pos(),
 					   QString::fromStdString(Timecode::time_to_timecode(
 						   time_movement, tooltip_timebase,
-						   Core::instance()->GetTimecodeDisplay(), true)),
+						   App::instance()->GetTimecodeDisplay(), true)),
 					   parent());
 }
 
@@ -889,7 +889,7 @@ void PointerTool::FinishDrag(TimelineViewMouseEvent *event)
 		}
 	}
 
-	Core::instance()->undo_stack()->push(
+	App::instance()->undo_stack()->push(
 		command, qApp->translate("PointerTool", "Moved Clips"));
 }
 

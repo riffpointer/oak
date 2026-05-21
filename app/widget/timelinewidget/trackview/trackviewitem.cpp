@@ -159,7 +159,7 @@ void TrackViewItem::ShowContextMenu(const QPoint &p)
 void TrackViewItem::DeleteTrack()
 {
 	emit AboutToDeleteTrack(track_);
-	Core::instance()->undo_stack()->push(
+	App::instance()->undo_stack()->push(
 		new TimelineRemoveTrackCommand(track_),
 		tr("Deleted Track \"%1\"").arg(track_->GetLabelOrName()));
 }
@@ -190,7 +190,7 @@ void TrackViewItem::DeleteAllEmptyTracks()
 			foreach (Track *track, tracks_to_remove) {
 				command->add_child(new TimelineRemoveTrackCommand(track));
 			}
-			Core::instance()->undo_stack()->push(
+			App::instance()->undo_stack()->push(
 				command, tr("Deleted All Empty Tracks"));
 		}
 	}

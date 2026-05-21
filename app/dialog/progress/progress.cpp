@@ -92,7 +92,7 @@ void ProgressDialog::showEvent(QShowEvent *e)
 	if (first_show_) {
 		elapsed_timer_lbl_->Start();
 
-		Core::instance()->main_window()->SetApplicationProgressStatus(
+		App::instance()->main_window()->SetApplicationProgressStatus(
 			MainWindow::kProgressShow);
 
 		first_show_ = false;
@@ -103,7 +103,7 @@ void ProgressDialog::closeEvent(QCloseEvent *e)
 {
 	super::closeEvent(e);
 
-	Core::instance()->main_window()->SetApplicationProgressStatus(
+	App::instance()->main_window()->SetApplicationProgressStatus(
 		MainWindow::kProgressNone);
 
 	elapsed_timer_lbl_->Stop();
@@ -122,13 +122,13 @@ void ProgressDialog::SetProgress(double value)
 	bar_->setValue(percent);
 	elapsed_timer_lbl_->SetProgress(value);
 
-	Core::instance()->main_window()->SetApplicationProgressValue(percent);
+	App::instance()->main_window()->SetApplicationProgressValue(percent);
 }
 
 void ProgressDialog::ShowErrorMessage(const QString &title,
 									  const QString &message)
 {
-	Core::instance()->main_window()->SetApplicationProgressStatus(
+	App::instance()->main_window()->SetApplicationProgressStatus(
 		MainWindow::kProgressError);
 
 	QMessageBox b(this);

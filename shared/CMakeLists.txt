@@ -30,9 +30,9 @@ set(SHARED_SOURCES
   src/common/xmlutils.cpp
 )
 
-add_library(oliveshared STATIC ${SHARED_SOURCES})
+add_library(oakshared STATIC ${SHARED_SOURCES})
 
-target_include_directories(oliveshared PUBLIC
+target_include_directories(oakshared PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_SOURCE_DIR}/third_party/openfx/include
   ${FFMPEG_INCLUDE_DIRS}
@@ -42,11 +42,11 @@ target_include_directories(oliveshared PUBLIC
 )
 
 # Private includes for shared/ sources to reference each other with relative paths
-target_include_directories(oliveshared PRIVATE
+target_include_directories(oakshared PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src/render
 )
 
-target_link_libraries(oliveshared PUBLIC
+target_link_libraries(oakshared PUBLIC
   Qt${QT_VERSION_MAJOR}::Core
   Qt${QT_VERSION_MAJOR}::Gui
   Qt${QT_VERSION_MAJOR}::Widgets
@@ -58,5 +58,5 @@ target_link_libraries(oliveshared PUBLIC
 
 # On macOS, allow undefined symbols to be resolved at runtime
 if(APPLE)
-  target_link_options(oliveshared PUBLIC -undefined dynamic_lookup)
+  target_link_options(oakshared PUBLIC -undefined dynamic_lookup)
 endif()

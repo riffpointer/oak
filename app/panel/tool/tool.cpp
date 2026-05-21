@@ -32,19 +32,19 @@ ToolPanel::ToolPanel()
 {
 	Toolbar *t = new Toolbar(this);
 
-	t->SetTool(Core::instance()->tool());
-	t->SetSnapping(Core::instance()->snapping());
+	t->SetTool(App::instance()->tool());
+	t->SetSnapping(App::instance()->snapping());
 
 	SetWidgetWithPadding(t);
 
-	connect(t, &Toolbar::ToolChanged, Core::instance(), &Core::SetTool);
-	connect(Core::instance(), &Core::ToolChanged, t, &Toolbar::SetTool);
+	connect(t, &Toolbar::ToolChanged, App::instance(), &App::SetTool);
+	connect(App::instance(), &App::ToolChanged, t, &Toolbar::SetTool);
 
-	connect(t, &Toolbar::SnappingChanged, Core::instance(), &Core::SetSnapping);
-	connect(Core::instance(), &Core::SnappingChanged, t, &Toolbar::SetSnapping);
+	connect(t, &Toolbar::SnappingChanged, App::instance(), &App::SetSnapping);
+	connect(App::instance(), &App::SnappingChanged, t, &Toolbar::SetSnapping);
 
-	connect(t, &Toolbar::SelectedTransitionChanged, Core::instance(),
-			&Core::SetSelectedTransitionObject);
+	connect(t, &Toolbar::SelectedTransitionChanged, App::instance(),
+			&App::SetSelectedTransitionObject);
 
 	Retranslate();
 }

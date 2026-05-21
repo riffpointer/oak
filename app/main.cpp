@@ -178,7 +178,7 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-	olive::Core::CoreParams startup_params;
+	olive::App::CoreParams startup_params;
 
 	CommandLineParser parser;
 
@@ -279,7 +279,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (export_option->IsSet()) {
-		startup_params.set_run_mode(olive::Core::CoreParams::kHeadlessExport);
+		startup_params.set_run_mode(olive::App::CoreParams::kHeadlessExport);
 	}
 
 	if (ts_option->IsSet()) {
@@ -324,7 +324,7 @@ int main(int argc, char *argv[])
 	// Create application instance
 	std::unique_ptr<QCoreApplication> a;
 
-	if (startup_params.run_mode() == olive::Core::CoreParams::kRunNormal) {
+	if (startup_params.run_mode() == olive::App::CoreParams::kRunNormal) {
 #ifdef _WIN32
 		// Since Oak Video Editor is linked with the console subsystem (for better POSIX compatibility), a console
 		// is created by default. If the user didn't request one, we free it here.

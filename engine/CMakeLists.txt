@@ -7,9 +7,9 @@ file(GLOB_RECURSE ENGINE_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
 )
 
-add_library(oliveengine STATIC ${ENGINE_SOURCES})
+add_library(oakengine STATIC ${ENGINE_SOURCES})
 
-target_include_directories(oliveengine PUBLIC
+target_include_directories(oakengine PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/src
   ${CMAKE_CURRENT_SOURCE_DIR}/src/codec
   ${CMAKE_SOURCE_DIR}/shared/include
@@ -21,8 +21,8 @@ target_include_directories(oliveengine PUBLIC
   ${OCIO_INCLUDE_DIRS}
 )
 
-target_link_libraries(oliveengine PUBLIC
-  oliveshared
+target_link_libraries(oakengine PUBLIC
+  oakshared
   Qt${QT_VERSION_MAJOR}::Core
   Qt${QT_VERSION_MAJOR}::Gui
   Qt${QT_VERSION_MAJOR}::Widgets
@@ -34,5 +34,5 @@ target_link_libraries(oliveengine PUBLIC
 )
 
 if(APPLE)
-  target_link_options(oliveengine PUBLIC -undefined dynamic_lookup)
+  target_link_options(oakengine PUBLIC -undefined dynamic_lookup)
 endif()
