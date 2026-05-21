@@ -31,11 +31,31 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            ninja-build pkg-config \
+            ninja-build pkg-config nasm \
             qt6-base-dev qt6-base-dev-tools qt6-base-private-dev qt6-tools-dev qt6-tools-dev-tools \
-            libavcodec-dev libavformat-dev libavfilter-dev libavutil-dev libswscale-dev libswresample-dev \
             libopencolorio-dev libopenimageio-dev libopenexr-dev libexpat1-dev \
             portaudio19-dev libgl1-mesa-dev libxkbcommon-dev
+
+      - name: Build FFmpeg from source (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg-src
+          cd ffmpeg-src
+          ./configure \
+            --prefix="$PWD/../ffmpeg-install" \
+            --enable-static \
+            --disable-shared \
+            --disable-doc \
+            --disable-programs \
+            --disable-avdevice \
+            --disable-network \
+            --enable-pic \
+            --enable-gpl \
+            --enable-version3
+          make -j$(nproc)
+          make install
+          cd ..
+          echo "FFMPEG_ROOT=$PWD/ffmpeg-install" >> "$GITHUB_ENV"
 
       # ------------------------------------------------------------------
       # macOS dependencies
@@ -80,6 +100,7 @@ jobs:
             mingw-w64-x86_64-openimageio
             mingw-w64-x86_64-opencolorio
             mingw-w64-x86_64-openexr
+            mingw-w64-x86_64-fmt
             mingw-w64-x86_64-expat
             mingw-w64-x86_64-portaudio
 
@@ -93,6 +114,7 @@ jobs:
             -DBUILD_TESTS=ON \
             -DBUILD_QT6=ON \
             -DOCIO_LOCATION=/usr \
+            -DFFMPEG_ROOT="${FFMPEG_ROOT}" \
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
 
       - name: Configure (macOS)
