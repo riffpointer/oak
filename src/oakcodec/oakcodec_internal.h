@@ -3,23 +3,25 @@
 
 #include "oak/codec_api.h"
 
-#include <string>
+#include "decoder.h"
+#include "encoder.h"
+#include "conformmanager.h"
+#include "footagedescription.h"
 
-/* Internal C++ structures backing the C API opaque handles.
- * Will wrap existing Decoder/Encoder/ConformManager classes. */
+namespace oakcodec
+{
 
-struct OakDecoder {
-    std::string filepath;
-    // TODO: wrap existing olive::Decoder or FFmpeg decoder
+struct OakDecoderWrapper {
+    olive::DecoderPtr decoder;
+    olive::FootageDescription desc;
+    QString filepath;
 };
 
-struct OakEncoder {
-    std::string filepath;
-    // TODO: wrap existing olive::Encoder
+struct OakEncoderWrapper {
+    olive::Encoder *encoder = nullptr;
+    olive::EncodingParams params;
 };
 
-struct OakConform {
-    // TODO: wrap ConformManager / ConformTask
-};
+} // namespace oakcodec
 
-#endif /* OAKCODEC_INTERNAL_H */
+#endif // OAKCODEC_INTERNAL_H

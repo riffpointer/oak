@@ -1,5 +1,15 @@
+/***
+
+  oakgl.so C API Implementation
+  Copyright (C) 2025 mikesolar
+
+  This file implements the pure C ABI declared in oak/renderer_api.h
+  by forwarding to the internal OpenGLRenderer C++ class.
+
+***/
+
 #include "oak/renderer_api.h"
-#include "oakgl_internal.h"
+#include "openglrenderer.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -8,28 +18,52 @@
 /*  Renderer lifecycle                                                  */
 /* ------------------------------------------------------------------ */
 
-OakRendererHandle oak_renderer_create(const char* backend_name, void* shared_context) {
+OakRendererHandle oak_renderer_create(const char *backend_name, void *shared_context)
+{
+    (void)backend_name; // Only "opengl" is supported for now
     (void)shared_context;
-    if (!backend_name) return nullptr;
-    // TODO: dispatch to OpenGL / Vulkan / Metal / CPU backend
-    auto* r = new OakRenderer();
-    r->backend_name = backend_name;
-    return r;
+
+    auto *r = new oakgl::OpenGLRenderer();
+    if (!r->Init()) {
+        delete r;
+        return nullptr;
+    }
+    return reinterpret_cast<OakRendererHandle>(r);
 }
 
-void oak_renderer_destroy(OakRendererHandle renderer) {
+void oak_renderer_destroy(OakRendererHandle renderer)
+{
     if (!renderer) return;
-    // TODO: release all owned textures, targets, shaders
-    delete renderer;
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    r->Destroy();
+    delete r;
 }
 
-const char* oak_renderer_backend_name(OakRendererHandle renderer) {
-    return renderer ? renderer->backend_name.c_str() : nullptr;
+const char *oak_renderer_backend_name(OakRendererHandle renderer)
+{
+    (void)renderer;
+    return "opengl";
 }
 
-int oak_renderer_capability(OakRendererHandle renderer, const char* capability) {
-    (void)renderer; (void)capability;
-    return 0; /* TODO */
+int oak_renderer_capability(OakRendererHandle renderer, const char *capability)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r || !capability) return 0;
+
+    if (std::strcmp(capability, "max_texture_size") == 0) {
+        GLint max_size = 0;
+        if (r->context()) {
+            r->context()->functions()->glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_size);
+        }
+        return max_size;
+    }
+    if (std::strcmp(capability, "supports_float_texture") == 0) {
+        return 1;
+    }
+    if (std::strcmp(capability, "supports_compute") == 0) {
+        return 0; // OpenGL compute not exposed yet
+    }
+    return 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -39,32 +73,66 @@ int oak_renderer_capability(OakRendererHandle renderer, const char* capability) 
 OakTextureHandle oak_texture_upload(OakRendererHandle renderer,
                                     int width, int height,
                                     OakRenderPixelFormat pix_fmt,
-                                    const void* data, size_t data_size,
+                                    const void *data, size_t data_size,
                                     OakFilterMode filter,
-                                    OakWrapMode wrap) {
-    (void)renderer; (void)width; (void)height; (void)pix_fmt;
-    (void)data; (void)data_size; (void)filter; (void)wrap;
-    return nullptr; /* TODO */
+                                    OakWrapMode wrap)
+{
+    (void)data_size;
+    (void)filter;
+    (void)wrap;
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return nullptr;
+
+    int channels = 4;
+    switch (pix_fmt) {
+    case OAK_RENDER_PIX_FMT_R8:  channels = 1; break;
+    case OAK_RENDER_PIX_FMT_RG8: channels = 2; break;
+    default: channels = 4; break;
+    }
+
+    GLuint tex = r->CreateTexture(width, height, 1, channels, pix_fmt, data, 0);
+    if (tex == 0) return nullptr;
+
+    OakTextureHandle handle = reinterpret_cast<OakTextureHandle>(
+        static_cast<uintptr_t>(tex));
+    return handle;
 }
 
 OakTextureHandle oak_texture_upload_from_frame(OakRendererHandle renderer,
                                                int width, int height,
                                                OakRenderPixelFormat pix_fmt,
-                                               const void* data, int stride) {
-    (void)renderer; (void)width; (void)height; (void)pix_fmt;
-    (void)data; (void)stride;
-    return nullptr; /* TODO */
+                                               const void *data, int stride)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return nullptr;
+
+    int channels = 4;
+    switch (pix_fmt) {
+    case OAK_RENDER_PIX_FMT_R8:  channels = 1; break;
+    case OAK_RENDER_PIX_FMT_RG8: channels = 2; break;
+    default: channels = 4; break;
+    }
+
+    GLuint tex = r->CreateTexture(width, height, 1, channels, pix_fmt, data, stride);
+    if (tex == 0) return nullptr;
+
+    return reinterpret_cast<OakTextureHandle>(static_cast<uintptr_t>(tex));
 }
 
-void oak_texture_destroy(OakRendererHandle renderer, OakTextureHandle texture) {
-    (void)renderer;
-    delete texture;
+void oak_texture_destroy(OakRendererHandle renderer, OakTextureHandle texture)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r || !texture) return;
+    GLuint tex = static_cast<GLuint>(reinterpret_cast<uintptr_t>(texture));
+    r->DestroyTexture(tex);
 }
 
-void oak_texture_size(OakTextureHandle texture, int* out_width, int* out_height) {
-    if (!texture) return;
-    if (out_width)  *out_width  = texture->width;
-    if (out_height) *out_height = texture->height;
+void oak_texture_size(OakTextureHandle texture, int *out_width, int *out_height)
+{
+    (void)texture;
+    // TODO: store metadata with handle
+    if (out_width)  *out_width  = 0;
+    if (out_height) *out_height = 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -74,96 +142,119 @@ void oak_texture_size(OakTextureHandle texture, int* out_width, int* out_height)
 OakTargetHandle oak_target_create(OakRendererHandle renderer,
                                   int width, int height,
                                   OakRenderPixelFormat pix_fmt,
-                                  bool has_depth) {
-    (void)renderer;
-    auto* t = new OakTarget();
-    t->width = width;
-    t->height = height;
-    t->pix_fmt = pix_fmt;
-    t->has_depth = has_depth;
-    // TODO: create native FBO / render pass
-    return t;
+                                  bool has_depth)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return nullptr;
+
+    GLuint fbo = r->CreateTarget(width, height, pix_fmt, has_depth);
+    if (fbo == 0) return nullptr;
+
+    return reinterpret_cast<OakTargetHandle>(static_cast<uintptr_t>(fbo));
 }
 
-void oak_target_destroy(OakRendererHandle renderer, OakTargetHandle target) {
-    (void)renderer;
-    delete target;
+void oak_target_destroy(OakRendererHandle renderer, OakTargetHandle target)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r || !target) return;
+    GLuint fbo = static_cast<GLuint>(reinterpret_cast<uintptr_t>(target));
+    r->DestroyTarget(fbo);
 }
 
 void oak_target_resize(OakRendererHandle renderer, OakTargetHandle target,
-                       int width, int height) {
-    (void)renderer;
-    if (!target) return;
-    target->width = width;
-    target->height = height;
-    // TODO: recreate native resources
+                       int width, int height)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r || !target) return;
+    GLuint fbo = static_cast<GLuint>(reinterpret_cast<uintptr_t>(target));
+    r->ResizeTarget(fbo, width, height);
 }
 
-void oak_target_size(OakTargetHandle target, int* out_width, int* out_height) {
-    if (!target) return;
-    if (out_width)  *out_width  = target->width;
-    if (out_height) *out_height = target->height;
+void oak_target_size(OakTargetHandle target, int *out_width, int *out_height)
+{
+    (void)target;
+    // TODO: store metadata with handle
+    if (out_width)  *out_width  = 0;
+    if (out_height) *out_height = 0;
 }
 
 /* ------------------------------------------------------------------ */
-/*  High-level draw commands                                            */
+/*  Drawing commands                                                    */
 /* ------------------------------------------------------------------ */
 
 void oak_renderer_begin(OakRendererHandle renderer, OakTargetHandle target,
-                        const float* clear_color) {
-    (void)renderer; (void)target; (void)clear_color;
-    // TODO: bind target, clear, begin command recording
+                        const float *clear_color)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return;
+    GLuint fbo = target ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(target)) : 0;
+    r->BeginFrame(fbo, clear_color);
 }
 
-void oak_renderer_end(OakRendererHandle renderer) {
-    (void)renderer;
-    // TODO: submit command buffer / swap
+void oak_renderer_end(OakRendererHandle renderer)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return;
+    r->EndFrame();
 }
 
 void oak_renderer_draw_quad(OakRendererHandle renderer,
-                            const float* mvp_matrix,
+                            const float *mvp_matrix,
                             OakTextureHandle texture,
                             OakBlendMode blend_mode,
-                            const float* color,
-                            const float* uv_rect) {
-    (void)renderer; (void)mvp_matrix; (void)texture;
-    (void)blend_mode; (void)color; (void)uv_rect;
-    // TODO: emit draw call
+                            const float *color,
+                            const float *uv_rect)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return;
+
+    GLuint tex = texture ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(texture)) : 0;
+    r->DrawQuad(mvp_matrix, tex, blend_mode, color, uv_rect);
 }
 
 void oak_renderer_draw_text(OakRendererHandle renderer,
-                            const char* utf8_text,
-                            const float* transform_matrix,
+                            const char *utf8_text,
+                            const float *transform_matrix,
                             float font_size,
-                            const float* color) {
-    (void)renderer; (void)utf8_text; (void)transform_matrix;
-    (void)font_size; (void)color;
-    // TODO: generate glyph quads, emit draw call
+                            const float *color)
+{
+    (void)renderer;
+    (void)utf8_text;
+    (void)transform_matrix;
+    (void)font_size;
+    (void)color;
+    // TODO: implement text rendering using font atlas
 }
 
 void oak_renderer_draw_lines(OakRendererHandle renderer,
-                             const float* points, int point_count,
-                             const float* color, float line_width) {
-    (void)renderer; (void)points; (void)point_count;
-    (void)color; (void)line_width;
-    // TODO: emit line draw call
+                             const float *points, int point_count,
+                             const float *color, float line_width)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return;
+    r->DrawLines(points, point_count, color, line_width);
 }
 
 void oak_renderer_draw_polygon(OakRendererHandle renderer,
-                               const float* points, int point_count,
-                               const float* color) {
-    (void)renderer; (void)points; (void)point_count; (void)color;
-    // TODO: emit polygon fill draw call
+                               const float *points, int point_count,
+                               const float *color)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return;
+    r->DrawPolygon(points, point_count, color);
 }
 
 void oak_renderer_apply_effect(OakRendererHandle renderer,
-                               const char* effect_name,
-                               const char* params,
+                               const char *effect_name,
+                               const char *params,
                                OakTargetHandle source_target,
-                               OakTargetHandle dest_target) {
-    (void)renderer; (void)effect_name; (void)params;
-    (void)source_target; (void)dest_target;
-    // TODO: dispatch to built-in post-processing shaders
+                               OakTargetHandle dest_target)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return;
+    GLuint src = source_target ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(source_target)) : 0;
+    GLuint dst = dest_target ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(dest_target)) : 0;
+    r->ApplyEffect(effect_name, params, src, dst);
 }
 
 /* ------------------------------------------------------------------ */
@@ -172,14 +263,24 @@ void oak_renderer_apply_effect(OakRendererHandle renderer,
 
 int oak_renderer_readback(OakRendererHandle renderer, OakTargetHandle target,
                           OakRenderPixelFormat out_pix_fmt,
-                          void** out_data, int* out_stride) {
-    (void)renderer; (void)target; (void)out_pix_fmt;
-    if (out_data)   *out_data   = nullptr;
+                          void **out_data, int *out_stride)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return -1;
+
+    GLuint fbo = target ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(target)) : 0;
+
+    // Need target dimensions - for now assume caller knows, or we can query
+    // TODO: store target metadata to get width/height from handle
+    // Using 0x0 will fail, so we return error until metadata is stored
+    (void)out_pix_fmt;
+    if (out_data) *out_data = nullptr;
     if (out_stride) *out_stride = 0;
-    return -1; /* TODO */
+    return -1; /* TODO: need width/height from target handle metadata */
 }
 
-void oak_renderer_free_readback(void* data) {
+void oak_renderer_free_readback(void *data)
+{
     std::free(data);
 }
 
@@ -188,27 +289,52 @@ void oak_renderer_free_readback(void* data) {
 /* ------------------------------------------------------------------ */
 
 OakShaderHandle oak_shader_compile(OakRendererHandle renderer,
-                                   const char* shader_name,
-                                   const char* vertex_source,
-                                   const char* fragment_source) {
-    (void)renderer; (void)shader_name;
-    (void)vertex_source; (void)fragment_source;
-    return nullptr; /* TODO */
+                                   const char *shader_name,
+                                   const char *vertex_source,
+                                   const char *fragment_source)
+{
+    (void)shader_name;
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return nullptr;
+
+    GLuint program = r->CompileShader(vertex_source, fragment_source);
+    if (program == 0) return nullptr;
+
+    return reinterpret_cast<OakShaderHandle>(static_cast<uintptr_t>(program));
 }
 
-void oak_shader_destroy(OakRendererHandle renderer, OakShaderHandle shader) {
-    (void)renderer;
-    delete shader;
+void oak_shader_destroy(OakRendererHandle renderer, OakShaderHandle shader)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r || !shader) return;
+    GLuint program = static_cast<GLuint>(reinterpret_cast<uintptr_t>(shader));
+    r->DestroyShader(program);
 }
 
 void oak_renderer_draw_with_shader(OakRendererHandle renderer,
                                    OakShaderHandle shader,
-                                   const char* uniforms_json,
-                                   OakTextureHandle* textures, int texture_count,
-                                   OakTargetHandle dest_target) {
-    (void)renderer; (void)shader; (void)uniforms_json;
-    (void)textures; (void)texture_count; (void)dest_target;
-    // TODO: parse uniforms_json, bind textures, emit custom shader draw call
+                                   const char *uniforms_json,
+                                   OakTextureHandle *textures, int texture_count,
+                                   OakTargetHandle dest_target)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return;
+
+    GLuint program = shader ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(shader)) : 0;
+    GLuint dst = dest_target ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(dest_target)) : 0;
+
+    // Convert texture handles to GLuint array
+    GLuint *tex_ids = nullptr;
+    if (texture_count > 0 && textures) {
+        tex_ids = new GLuint[texture_count];
+        for (int i = 0; i < texture_count; i++) {
+            tex_ids[i] = static_cast<GLuint>(reinterpret_cast<uintptr_t>(textures[i]));
+        }
+    }
+
+    r->DrawWithShader(program, uniforms_json, tex_ids, texture_count, dst);
+
+    delete[] tex_ids;
 }
 
 /* ------------------------------------------------------------------ */
@@ -216,16 +342,21 @@ void oak_renderer_draw_with_shader(OakRendererHandle renderer,
 /* ------------------------------------------------------------------ */
 
 OakFontAtlasHandle oak_font_load(OakRendererHandle renderer,
-                                 const char* font_path, float font_size) {
-    (void)renderer;
-    auto* f = new OakFontAtlas();
-    f->font_path = font_path ? font_path : "";
-    f->font_size = font_size;
-    // TODO: rasterize glyphs, create texture
-    return f;
+                                 const char *font_path, float font_size)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return nullptr;
+
+    GLuint font = r->LoadFont(font_path, font_size);
+    if (font == 0) return nullptr;
+
+    return reinterpret_cast<OakFontAtlasHandle>(static_cast<uintptr_t>(font));
 }
 
-void oak_font_destroy(OakRendererHandle renderer, OakFontAtlasHandle font) {
-    (void)renderer;
-    delete font;
+void oak_font_destroy(OakRendererHandle renderer, OakFontAtlasHandle font)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r || !font) return;
+    GLuint f = static_cast<GLuint>(reinterpret_cast<uintptr_t>(font));
+    r->DestroyFont(f);
 }

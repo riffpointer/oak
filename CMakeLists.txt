@@ -281,6 +281,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 list(APPEND OLIVE_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/ext)
 
 add_subdirectory(shared)
+add_subdirectory(src/oakcodec)
 add_subdirectory(engine)
 add_subdirectory(ext)
 add_subdirectory(third_party/openfx/HostSupport)
