@@ -26,7 +26,6 @@ set(SHARED_SOURCES
   src/common/ocioutils.cpp
   src/common/oiioutils.cpp
   src/common/icons.cpp
-  src/common/qtutils.cpp
   src/common/xmlutils.cpp
 )
 
@@ -49,7 +48,8 @@ target_include_directories(oakshared PRIVATE
 target_link_libraries(oakshared PUBLIC
   Qt${QT_VERSION_MAJOR}::Core
   Qt${QT_VERSION_MAJOR}::Gui
-  Qt${QT_VERSION_MAJOR}::Widgets
+  # Qt${QT_VERSION_MAJOR}::Widgets  REMOVED: only qtutils.cpp needs it, moved to app/
+
   ${FFMPEG_LIBRARIES}
   ${OIIO_LIBRARIES}
   ${OPENEXR_LIBRARIES}

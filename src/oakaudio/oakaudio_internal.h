@@ -5,13 +5,20 @@
 
 #include <vector>
 #include <cstdint>
+#include <cstring>
+#include <algorithm>
 
-/* Internal C++ structures backing the C API opaque handles. */
+extern "C" {
+#include <libswresample/swresample.h>
+#include <libavutil/channel_layout.h>
+}
 
 struct OakAudioBuffer {
     OakAudioParams params{};
     std::vector<float> data;
     bool interleaved = true;
+    // For planar layout: per-channel pointers into data
+    std::vector<float*> planar_ptrs;
 };
 
 struct OakAudioResampler {
@@ -19,7 +26,7 @@ struct OakAudioResampler {
     int src_sample_rate = 0;
     int dst_channels = 0;
     int dst_sample_rate = 0;
-    // TODO: wrap FFmpeg swresample or similar
+    SwrContext* swr = nullptr;
 };
 
 struct OakAudioMixerSource {

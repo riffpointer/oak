@@ -33,6 +33,9 @@ oakrenderer \
 
 ## 二、命令协议（主进程 → 渲染器，JSON Lines）
 
+> **全链路帧格式**：渲染器内部及共享内存传输的帧均为 **RGBA32F + ACEScg**（`OAK_FRAME_PIX_RGBA32F`，`colorspace = "ACES - ACEScg"`）。
+> 预览窗口显示前必须通过 `oakcolor.so` 做 View Transform（RRT + ODT）转换到显示空间。
+
 每行一个 JSON 对象，以 `\n` 结尾。主进程发送命令后，渲染器必须回复一行 JSON（异步事件除外）。
 
 ### 2.1 加载节点图
@@ -76,7 +79,8 @@ oakrenderer \
   "timebase_den": 1,
   "color_config_path": "/path/to/config.ocio",
   "input_color_space": "ACES - ACEScg",
-  "display_color_space": "sRGB"
+  "display_color_space": "sRGB",
+  "view_transform": "ACES 1.0 SDR-video"
 }
 ```
 
@@ -132,9 +136,12 @@ oakrenderer \
   "width": 1920,
   "height": 1080,
   "pix_fmt": "rgba32f",
+  "colorspace": "ACES - ACEScg",
   "stride": 7680
 }
 ```
+
+@note `pix_fmt` 固定为 `"rgba32f"`，`colorspace` 固定为 `"ACES - ACEScg"`。
 
 ### 2.5 查询帧状态
 
@@ -212,6 +219,7 @@ oakrenderer \
   "width": 1920,
   "height": 1080,
   "pix_fmt": "rgba32f",
+  "colorspace": "ACES - ACEScg",
   "stride": 7680,
   "render_time_ms": 45
 }
@@ -280,7 +288,8 @@ typedef struct {
     uint32_t version;         // 1
     uint32_t width;
     uint32_t height;
-    uint32_t pix_fmt;         // 枚举值
+    uint32_t pix_fmt;         // 固定为 OAK_FRAME_PIX_RGBA32F
+    uint32_t colorspace_tag;  // 0 = ACEScg (默认), 1 = sRGB, 2 = Rec.2020...
     uint32_t stride;
     uint64_t timestamp_ns;    // 渲染完成时间戳
     uint64_t reserved[5];     // 保留

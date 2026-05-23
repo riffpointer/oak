@@ -138,6 +138,21 @@ jobs:
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
 
       # ------------------------------------------------------------------
+      # Check FFmpeg encapsulation boundary (v2 P2.5)
+      # Only src/oakcodec/ is allowed to include FFmpeg headers.
+      # engine/src/ and shared/ are exempted during migration.
+      # ------------------------------------------------------------------
+      - name: Check FFmpeg encapsulation boundary
+        run: |
+          if grep -rE '#include\s+<lib(avcodec|avformat|avutil|swscale|swresample|avfilter)' \
+             --include='*.h' --include='*.cpp' \
+             app/ src/oakgl/ src/oakaudio/ src/oakcolor/ src/oakcore/ src/oaknodes/; then
+            echo 'ERROR: FFmpeg headers found outside src/oakcodec/'
+            exit 1
+          fi
+          echo 'FFmpeg encapsulation OK'
+
+      # ------------------------------------------------------------------
       # Build Oak
       # ------------------------------------------------------------------
       - name: Build

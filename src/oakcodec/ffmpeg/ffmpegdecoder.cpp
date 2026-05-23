@@ -110,6 +110,23 @@ AVFramePtr FFmpegDecoder::ProcessFrameIntoBuffer(AVFramePtr f,
 {
 	Q_UNUSED(original)
 
+	// GPU zero-copy path: if renderer hint is present and frame is planar YUV,
+	// return raw YUV for caller to upload via oak_texture_create_planar
+	if (p.renderer != nullptr) {
+		AVPixelFormat fmt = static_cast<AVPixelFormat>(f->format);
+		if (fmt == AV_PIX_FMT_YUV420P || fmt == AV_PIX_FMT_YUV422P ||
+			fmt == AV_PIX_FMT_YUV444P || fmt == AV_PIX_FMT_YUVJ420P ||
+			fmt == AV_PIX_FMT_YUVJ422P || fmt == AV_PIX_FMT_YUVJ444P ||
+			fmt == AV_PIX_FMT_YUVA420P || fmt == AV_PIX_FMT_YUVA422P ||
+			fmt == AV_PIX_FMT_YUVA444P || fmt == AV_PIX_FMT_YUV420P10LE ||
+			fmt == AV_PIX_FMT_YUV422P10LE || fmt == AV_PIX_FMT_YUV444P10LE ||
+			fmt == AV_PIX_FMT_YUV420P12LE || fmt == AV_PIX_FMT_YUV422P12LE ||
+			fmt == AV_PIX_FMT_YUV444P12LE || fmt == AV_PIX_FMT_YUV420P16LE ||
+			fmt == AV_PIX_FMT_YUV422P16LE || fmt == AV_PIX_FMT_YUV444P16LE) {
+			return f;
+		}
+	}
+
 	// Target format: RGBA F32 for maximum precision and compatibility with oakgl
 	AVPixelFormat dst_fmt = AV_PIX_FMT_RGBAF32;
 	int dst_w = f->width / p.divider;

@@ -24,9 +24,6 @@
 
 #include <olive/core/core.h>
 #include <QComboBox>
-extern "C" {
-#include <libavformat/avformat.h>
-}
 #include "ui/humanstrings.h"
 
 namespace olive

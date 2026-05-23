@@ -2,6 +2,9 @@
 
 > 主进程中的渲染协调：管理渲染器进程池、调度帧范围、聚合结果、与 PreviewAutoCacher / DiskManager 交互。
 > 对外暴露的接口供 `oak-editor` 主程序调用。
+>
+> **全链路约定**：渲染器进程内部及共享内存传输的帧均为 **RGBA32F + ACEScg**。
+> 预览窗口显示前必须通过 `oakcolor.so` 做 View Transform（RRT + ODT）。
 
 ## 一、类型定义
 
@@ -126,19 +129,16 @@ int oak_coord_poll_job(OakCoordHandle coord, int job_id,
  * @param job_id 任务 ID。
  * @param frame_number 帧号。
  * @param out_status 输出帧状态（OAK_FRAME_DONE 表示可用）。
- * @param out_data 输出帧数据指针（指向共享内存，无需释放，但仅在 oak_coord_release_frame 前有效）。
- * @param out_width 输出宽度。
- * @param out_height 输出高度。
- * @param out_pix_fmt 输出像素格式（见 oak_pixel_format 定义）。
- * @param out_stride 输出每行字节数。
+ * @param out_frame  输出帧描述符（浅拷贝，指向共享内存）。
+ *                     像素格式固定为 RGBA32F，色彩空间为 ACEScg。
+ *                     调用者**不得**修改帧数据，**不得**调用 oak_frame_release。
+ *                     该帧的生命周期由协调器管理，必须在 oak_coord_release_frame 前使用。
  * @return 0 成功，非 0 失败（帧尚未渲染或不存在）。
  * @note 获取成功后，调用者必须在合理时间内调用 oak_coord_release_frame，否则共享内存不会被回收。
  */
 int oak_coord_get_frame(OakCoordHandle coord, int job_id, int frame_number,
                         int* out_status,
-                        void** out_data,
-                        int* out_width, int* out_height, int* out_pix_fmt,
-                        int* out_stride);
+                        OakFrame* out_frame);
 
 /**
  * @brief 释放帧的共享内存引用。

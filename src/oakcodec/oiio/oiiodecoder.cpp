@@ -24,7 +24,6 @@
 #include <QDebug>
 #include <QDir>
 #include <QFileInfo>
-#include <QMessageBox>
 
 #include "olive/common/oiioutils.h"
 // #include "render/renderer.h"  // removed for oakcodec.so independence

@@ -1,7 +1,14 @@
 # oakcolor.so C API 设计
 
-> 色彩管理：OCIO 配置管理、色彩空间转换、LUT 应用、显示变换。
-> 内部使用 OpenColorIO，对外完全隐藏 OCIO C++ API。
+> 色彩管理：OCIO 配置管理、色彩空间转换、LUT 应用、显示变换。  
+> 内部使用 OpenColorIO，对外完全隐藏 OCIO C++ API。  
+> **核心约定**：Oak 全链路内部工作空间为 **ACEScg (AP1 primaries, scene-referred linear)**。所有模块通过 `oakcolor.so` 做 IDT（输入转换）和 ODT（输出转换）。
+>
+> **IDT/ODT 调用方**：
+> - **IDT**：由 `oakcodec.so` 在解码器输出时调用（源文件色彩空间 → ACEScg）。
+> - **ODT**：由 `oakcodec.so` 在编码器写入前调用（ACEScg → 目标编码空间）。
+> - **View Transform**：由 `oakengine.so` 在预览窗口显示前调用（ACEScg → 显示空间）。
+> - **节点内部转换**：由 `oaknodes.so` 的 `PluginNode` 在调用不支持 ACEScg 的 OFX 插件时调用。
 
 ## 一、类型定义
 
@@ -84,6 +91,14 @@ const char* oak_color_config_display_view_name(OakColorConfigHandle config, cons
  * @param dst_space_name 目标色彩空间名称。
  * @return 处理器句柄，NULL 表示失败（如色彩空间不存在）。
  * @note 处理器创建后可以多次使用，是线程安全的。
+ * @note 全链路 ACEScg 中最常用的转换对：
+ *       - IDT: "Input - Rec.709" → "ACES - ACEScg"
+ *       - IDT: "Input - ARRI - V3 LogC (EI800) - Wide Gamut" → "ACES - ACEScg"
+ *       - IDT: "Input - Apple - Apple Log" → "ACES - ACEScg"
+ *       - ODT: "ACES - ACEScg" → "Output - Rec.709"
+ *       - ODT: "ACES - ACEScg" → "Output - Rec.2020 PQ"
+ *       - ODT: "ACES - ACEScg" → "Output - P3-DCI"
+ *       - 显示: "ACES - ACEScg" → "Output - sRGB" (通过 View Transform)
  */
 OakColorProcessorHandle oak_color_processor_create(OakColorConfigHandle config,
                                                      const char* src_space_name,
@@ -107,9 +122,11 @@ void oak_color_processor_free(OakColorProcessorHandle processor);
  * @param width 图像宽度。
  * @param height 图像高度。
  * @param in_data 输入数据（RGBA float32，非交错或交错取决于 pix_layout）。
+ *                数据应在 scene-referred linear 空间。
  * @param out_data 输出数据（调用者分配，大小与输入相同）。
  * @param pix_layout 像素布局：0 = 交错 RGBA，1 = planar（RRRR...GGGG...BBBB...AAAA...）。
  * @return 0 成功，非 0 失败。
+ * @note 这是 IDT/ODT 的 CPU 实现。GPU 路径应通过 oak_renderer_draw_with_shader + OCIO GPU LUT 实现。
  */
 int oak_color_processor_apply(OakColorProcessorHandle processor,
                               int width, int height,
@@ -131,13 +148,16 @@ void oak_color_processor_apply_pixel(OakColorProcessorHandle processor,
 /**
  * @brief 创建显示变换（用于 viewer 预览）。
  * @param config 配置句柄。
- * @param input_space 输入图像的色彩空间。
- * @param display_name 显示设备名称（如 "sRGB"、"Rec.709"）。
- * @param view_name 视图名称（如 "ACES 1.0 SDR-video"）。
- * @param look_name 可选的 Look 名称（NULL 表示无）。
- * @param exposure_fstop 曝光调整（EV）。
+ * @param input_space 输入图像的色彩空间。全链路 ACEScg 下固定为 "ACES - ACEScg"。
+ * @param display_name 显示设备名称（如 "sRGB"、"Rec.709"、"Rec.2020"、"P3"）。
+ * @param view_name 视图名称（如 "ACES 1.0 SDR-video"、"ACES 1.0 HDR-video"）。
+ * @param look_name 可选的 Look 名称（NULL 表示无）。如 "Neutral"、"Warm"、"Cool"。
+ * @param exposure_fstop 曝光调整（EV）。用于预览时的曝光微调，不影响实际输出。
  * @param display_gamma 显示 Gamma 调整。
  * @return 显示变换处理器句柄。
+ * @note View Transform = RRT (Reference Render Transform) + ODT (Output Device Transform)。
+ *       它把 scene-referred linear 的 ACEScg 数据转换成 display-referred 的非线性数据，适合直接显示在屏幕上。
+ *       **严禁跳过 View Transform 直接显示 ACEScg 数据**，否则画面会发灰、过曝。
  */
 OakDisplayTransformHandle oak_display_transform_create(OakColorConfigHandle config,
                                                         const char* input_space,

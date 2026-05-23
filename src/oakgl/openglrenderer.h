@@ -55,6 +55,9 @@ public:
                         bool has_depth);
     void DestroyTarget(GLuint fbo);
     void ResizeTarget(GLuint fbo, int width, int height);
+    GLuint GetTargetColorTexture(GLuint fbo);
+    GLuint DetachTargetColorTexture(GLuint fbo);
+    bool GetTargetSize(GLuint fbo, int* out_width, int* out_height);
 
     /* ---- Shader ---- */
     GLuint CompileShader(const char *vert_src, const char *frag_src);
@@ -78,6 +81,10 @@ public:
 
     void DrawWithShader(GLuint program, const char *uniforms_json,
                         GLuint *textures, int tex_count, GLuint dst_fbo);
+
+    void BlitYUVToRGBA(GLuint y_tex, GLuint u_tex, GLuint v_tex,
+                       GLuint dst_fbo, int width, int height,
+                       const float *color_matrix_3x3, bool full_range);
 
     /* ---- Readback ---- */
     bool Readback(GLuint fbo, int width, int height, OakRenderPixelFormat fmt,

@@ -3,6 +3,10 @@
 > OpenFX 插件宿主。对外暴露两部分接口：
 > 1. 符合 OpenFX 官方 C ABI 标准的 Host Suite（供插件调用）。
 > 2. oak 特有的宿主注册/查询接口（供主进程控制插件加载）。
+>
+> **核心约定**：Oak 全链路内部工作空间为 **RGBA32F + ACEScg**。  
+> OFX 插件的 `kOfxBitDepthFloat` 默认被解释为 ACEScg linear。若插件不支持 ACEScg，
+> `PluginNode`（在 `oaknodes.so` 中）负责在调用插件前/后做色彩空间桥接。
 
 ## 一、OpenFX 标准 Host Suite
 
@@ -162,9 +166,18 @@ void oak_plugin_instance_set_time(OakPluginInstanceHandle instance, double t);
  * @param render_scale_x 渲染缩放 X（用于代理/预览）。
  * @param render_scale_y 渲染缩放 Y。
  * @param input_textures 输入纹理数组（对应插件的 clip）。
+ *                       每个元素为 OakTextureHandle。纹理格式应为 RGBA32F（ACEScg）。
+ *                       若插件声明的色彩空间不是 ACEScg，由 PluginNode 在调用前转换。
  * @param input_count 输入数量。
  * @param output_target 输出目标（OakTargetHandle 或 OakTextureHandle）。
+ *                      输出格式应为 RGBA32F（ACEScg）。
  * @return 0 成功，非 0 失败。
+ *
+ * @note 插件内部的像素格式通过 `kOfxImageEffectPropSupportedPixelDepths` 声明：
+ *       - `kOfxBitDepthFloat`（32F）：推荐。Oak 直接传递 ACEScg 数据，零拷贝。
+ *       - `kOfxBitDepthHalf`（16F）：Oak 内部做 32F→16F 转换（精度损失可接受）。
+ *       - `kOfxBitDepthShort`（16U）/ `kOfxBitDepthByte`（8U）：
+ *         Oak 做 32F→8/16U + ACEScg→sRGB 转换。PluginNode 会自动桥接。
  */
 int oak_plugin_instance_render(OakPluginInstanceHandle instance,
                                double time,

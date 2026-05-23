@@ -1,41 +1,26 @@
 /*
- *  oakcodec.so C API
- *  媒体编解码：文件打开、视频/音频/字幕解码、编码输出、conform（音频预处理）。
+ *  oakcodec.so C API (v2)
+ *  媒体编解码：文件打开、视频/音频/字幕解码、编码输出、conform。
+ *  FFmpeg 调用完全封装在 oakcodec.so 内部，外部不得直接调用 FFmpeg。
+ *  全链路默认：RGBA32F + ACEScg。
  */
 
 #ifndef OAK_CODEC_API_H
 #define OAK_CODEC_API_H
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <stddef.h>
+#include "oak/frame_api.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* ------------------------------------------------------------------ */
-/*  Opaque handles                                                      */
-/* ------------------------------------------------------------------ */
-
-typedef struct OakDecoder* OakDecoderHandle;
-typedef struct OakEncoder* OakEncoderHandle;
-typedef struct OakConform* OakConformHandle;
+typedef struct OakDecoder*  OakDecoderHandle;
+typedef struct OakEncoder*  OakEncoderHandle;
+typedef struct OakConform*  OakConformHandle;
 
 /* ------------------------------------------------------------------ */
-/*  Pixel / audio format enums                                          */
+/*  音频格式                                                            */
 /* ------------------------------------------------------------------ */
-
-typedef enum {
-    OAK_PIX_FMT_INVALID = 0,
-    OAK_PIX_FMT_RGBA8,       /* 8-bit unsigned per channel */
-    OAK_PIX_FMT_RGBA16,      /* 16-bit unsigned per channel */
-    OAK_PIX_FMT_RGBA32F,     /* 32-bit float per channel */
-    OAK_PIX_FMT_RGB8,
-    OAK_PIX_FMT_YUV420P8,
-    OAK_PIX_FMT_YUV422P8,
-    OAK_PIX_FMT_YUV444P8,
-} OakPixelFormat;
 
 typedef enum {
     OAK_AUDIO_FMT_INVALID = 0,
@@ -47,22 +32,22 @@ typedef enum {
 } OakAudioFormat;
 
 /* ------------------------------------------------------------------ */
-/*  Stream info structs (POD)                                           */
+/*  流信息（POD）                                                       */
 /* ------------------------------------------------------------------ */
 
 typedef struct {
-    int width;
-    int height;
-    OakPixelFormat pix_fmt;
-    int64_t timebase_num;   /* 时间基分子 */
-    int64_t timebase_den;   /* 时间基分母 */
+    int     width;
+    int     height;
+    OakFramePixelFormat pix_fmt;
+    int64_t timebase_num;
+    int64_t timebase_den;
     double  frame_rate;
     int64_t duration_frames;
 } OakVideoStreamInfo;
 
 typedef struct {
-    int sample_rate;
-    int channels;
+    int     sample_rate;
+    int     channels;
     OakAudioFormat sample_fmt;
     int64_t timebase_num;
     int64_t timebase_den;
@@ -73,12 +58,12 @@ typedef struct {
     int video_stream_count;
     int audio_stream_count;
     int subtitle_stream_count;
-    OakVideoStreamInfo* video_streams;   /* 数组，长度 video_stream_count */
-    OakAudioStreamInfo* audio_streams;   /* 数组，长度 audio_stream_count */
+    OakVideoStreamInfo* video_streams;
+    OakAudioStreamInfo* audio_streams;
 } OakMediaInfo;
 
 /* ------------------------------------------------------------------ */
-/*  Decoder lifecycle                                                   */
+/*  解码器生命周期                                                      */
 /* ------------------------------------------------------------------ */
 
 OakDecoderHandle oak_decoder_open(const char* filepath, const char* codec_hint,
@@ -87,23 +72,20 @@ void             oak_decoder_close(OakDecoderHandle decoder);
 void             oak_media_info_free(OakMediaInfo* info);
 
 /* ------------------------------------------------------------------ */
-/*  Video decode                                                        */
+/*  视频解码（返回 OakFrame）                                           */
 /* ------------------------------------------------------------------ */
 
 int  oak_decoder_read_video(OakDecoderHandle decoder, int stream_index,
                             int64_t time_num, int64_t time_den,
-                            OakPixelFormat out_pix_fmt,
-                            int out_width, int out_height,
-                            void** out_data, int* out_stride);
-void oak_frame_free(void* data);
+                            void* renderer_hint,   /* OakRendererHandle cast to void*, NULL = CPU */
+                            OakFrame* out_frame);
 
 int  oak_decoder_thumbnail(OakDecoderHandle decoder, int stream_index,
                            int max_size,
-                           void** out_data, int* out_width, int* out_height,
-                           int* out_stride);
+                           OakFrame* out_frame);
 
 /* ------------------------------------------------------------------ */
-/*  Audio decode & conform                                              */
+/*  音频解码 & conform                                                  */
 /* ------------------------------------------------------------------ */
 
 int  oak_decoder_read_audio(OakDecoderHandle decoder, int stream_index,
@@ -111,17 +93,20 @@ int  oak_decoder_read_audio(OakDecoderHandle decoder, int stream_index,
                             float** out_data, int64_t* out_actual_samples);
 void oak_audio_buffer_free(float* data);
 
-/* ---- Conform (audio pre-process cache) ---- */
-int  oak_conform_get(const char* decoder_id, const char* cache_path,
-                     int stream_index,
+int  oak_conform_get(const char* filename, const char* decoder_id,
+                     const char* cache_path, int stream_index,
                      int target_sample_rate, int target_channels,
+                     OakAudioFormat target_sample_fmt,
                      bool wait,
                      const char*** out_filenames, int* out_count);
-int  oak_conform_poll(const char* decoder_id);
+int  oak_conform_poll(const char* filename, const char* cache_path,
+                      int stream_index,
+                      int target_sample_rate, int target_channels,
+                      OakAudioFormat target_sample_fmt);
 void oak_conform_free_filenames(const char** filenames, int count);
 
 /* ------------------------------------------------------------------ */
-/*  Encoder                                                             */
+/*  编码器                                                              */
 /* ------------------------------------------------------------------ */
 
 OakEncoderHandle oak_encoder_create(const char* filepath,
@@ -131,23 +116,26 @@ OakEncoderHandle oak_encoder_create(const char* filepath,
 void oak_encoder_close(OakEncoderHandle encoder);
 
 void oak_encoder_set_video_params(OakEncoderHandle encoder,
-                                  int width, int height, OakPixelFormat pix_fmt,
+                                  int width, int height,
+                                  OakFramePixelFormat pix_fmt,
                                   int64_t timebase_num, int64_t timebase_den,
                                   double frame_rate);
+
+void oak_encoder_set_video_output_format(OakEncoderHandle encoder,
+                                         OakFramePixelFormat output_pix_fmt);
+
+void oak_encoder_set_video_output_colorspace(OakEncoderHandle encoder,
+                                             const char* output_colorspace);
 
 void oak_encoder_set_audio_params(OakEncoderHandle encoder,
                                   int sample_rate, int channels,
                                   OakAudioFormat sample_fmt,
                                   int64_t timebase_num, int64_t timebase_den);
 
-int  oak_encoder_write_video(OakEncoderHandle encoder,
-                             const void* data, int stride,
-                             int64_t pts_num, int64_t pts_den);
-
+int  oak_encoder_write_video(OakEncoderHandle encoder, const OakFrame* frame);
 int  oak_encoder_write_audio(OakEncoderHandle encoder,
                              const float* data, int64_t samples,
                              int64_t pts_num, int64_t pts_den);
-
 int  oak_encoder_finalize(OakEncoderHandle encoder);
 
 #ifdef __cplusplus

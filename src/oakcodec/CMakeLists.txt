@@ -76,6 +76,7 @@ target_link_libraries(oakcodec PRIVATE
     FFMPEG::avfilter
     FFMPEG::swscale
     FFMPEG::swresample
+    oakcolor
 )
 
 set_target_properties(oakcodec PROPERTIES

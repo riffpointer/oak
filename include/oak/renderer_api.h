@@ -1,22 +1,18 @@
 /*
- *  oakgl.so / oak_renderer C API
+ *  oakgl.so / oak_renderer C API (v2)
  *  渲染后端抽象层。唯一知道底层图形 API 的模块。
+ *  全链路默认：RGBA32F + ACEScg (AP1, scene-referred linear)。
  */
 
 #ifndef OAK_RENDERER_API_H
 #define OAK_RENDERER_API_H
 
-#include <stdint.h>
-#include <stdbool.h>
 #include <stddef.h>
+#include "oak/frame_api.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/* ------------------------------------------------------------------ */
-/*  Opaque handles                                                      */
-/* ------------------------------------------------------------------ */
 
 typedef struct OakRenderer*  OakRendererHandle;
 typedef struct OakTexture*   OakTextureHandle;
@@ -25,20 +21,28 @@ typedef struct OakShader*    OakShaderHandle;
 typedef struct OakFontAtlas* OakFontAtlasHandle;
 
 /* ------------------------------------------------------------------ */
-/*  Enums                                                               */
+/*  像素格式                                                            */
 /* ------------------------------------------------------------------ */
 
 typedef enum {
     OAK_RENDER_PIX_FMT_RGBA8 = 0,
     OAK_RENDER_PIX_FMT_RGBA16,
-    OAK_RENDER_PIX_FMT_RGBA32F,
-    OAK_RENDER_PIX_FMT_R8,          /* single channel (mask, depth) */
-    OAK_RENDER_PIX_FMT_RG8,         /* dual channel (normal map) */
+    OAK_RENDER_PIX_FMT_RGBA32F,    /* 默认中间格式，全链路 F32 + ACEScg */
+    OAK_RENDER_PIX_FMT_R8,
+    OAK_RENDER_PIX_FMT_RG8,
+    OAK_RENDER_PIX_FMT_R16,
+    OAK_RENDER_PIX_FMT_R32F,
+    OAK_RENDER_PIX_FMT_R8_SNORM,
+    OAK_RENDER_PIX_FMT_RG8_SNORM,
 } OakRenderPixelFormat;
 
+/* ------------------------------------------------------------------ */
+/*  混合 / 过滤 / 环绕                                                  */
+/* ------------------------------------------------------------------ */
+
 typedef enum {
-    OAK_BLEND_REPLACE = 0,   /* src */
-    OAK_BLEND_OVER,          /* src over dst */
+    OAK_BLEND_REPLACE = 0,
+    OAK_BLEND_OVER,
     OAK_BLEND_ADD,
     OAK_BLEND_MULTIPLY,
     OAK_BLEND_SCREEN,
@@ -58,7 +62,19 @@ typedef enum {
 } OakWrapMode;
 
 /* ------------------------------------------------------------------ */
-/*  Renderer lifecycle                                                  */
+/*  v2 新增：纹理平面描述                                               */
+/* ------------------------------------------------------------------ */
+
+typedef struct {
+    int                   width;
+    int                   height;
+    OakRenderPixelFormat  pix_fmt;
+    const void*           data;
+    int                   stride;
+} OakTexturePlane;
+
+/* ------------------------------------------------------------------ */
+/*  渲染器生命周期                                                      */
 /* ------------------------------------------------------------------ */
 
 OakRendererHandle oak_renderer_create(const char* backend_name, void* shared_context);
@@ -67,7 +83,7 @@ const char*       oak_renderer_backend_name(OakRendererHandle renderer);
 int               oak_renderer_capability(OakRendererHandle renderer, const char* capability);
 
 /* ------------------------------------------------------------------ */
-/*  Texture management                                                  */
+/*  纹理管理                                                            */
 /* ------------------------------------------------------------------ */
 
 OakTextureHandle oak_texture_upload(OakRendererHandle renderer,
@@ -82,11 +98,23 @@ OakTextureHandle oak_texture_upload_from_frame(OakRendererHandle renderer,
                                                OakRenderPixelFormat pix_fmt,
                                                const void* data, int stride);
 
+/* v2 新增：planar 上传 */
+OakTextureHandle oak_texture_create_planar(OakRendererHandle renderer,
+                                           int width, int height,
+                                           OakTexturePlane* planes, int plane_count);
+
+/* v2 新增：外部 surface 包装 */
+OakTextureHandle oak_texture_wrap_external(OakRendererHandle renderer,
+                                           int width, int height,
+                                           OakRenderPixelFormat pix_fmt,
+                                           void* external_handle,
+                                           const char* external_type);
+
 void oak_texture_destroy(OakRendererHandle renderer, OakTextureHandle texture);
 void oak_texture_size(OakTextureHandle texture, int* out_width, int* out_height);
 
 /* ------------------------------------------------------------------ */
-/*  Render target (FBO / render pass)                                   */
+/*  渲染目标                                                            */
 /* ------------------------------------------------------------------ */
 
 OakTargetHandle oak_target_create(OakRendererHandle renderer,
@@ -97,16 +125,19 @@ void            oak_target_destroy(OakRendererHandle renderer, OakTargetHandle t
 void            oak_target_resize(OakRendererHandle renderer, OakTargetHandle target,
                                   int width, int height);
 void            oak_target_size(OakTargetHandle target, int* out_width, int* out_height);
+OakTextureHandle oak_target_color_texture(OakRendererHandle renderer,
+                                          OakTargetHandle target);
+OakTextureHandle oak_target_detach_color_texture(OakRendererHandle renderer,
+                                               OakTargetHandle target);
 
 /* ------------------------------------------------------------------ */
-/*  High-level draw commands                                            */
+/*  绘制指令                                                            */
 /* ------------------------------------------------------------------ */
 
 void oak_renderer_begin(OakRendererHandle renderer, OakTargetHandle target,
                         const float* clear_color);
 void oak_renderer_end(OakRendererHandle renderer);
 
-/* ---- primitives ---- */
 void oak_renderer_draw_quad(OakRendererHandle renderer,
                             const float* mvp_matrix,
                             OakTextureHandle texture,
@@ -128,15 +159,31 @@ void oak_renderer_draw_polygon(OakRendererHandle renderer,
                                const float* points, int point_count,
                                const float* color);
 
-/* ---- post-processing ---- */
 void oak_renderer_apply_effect(OakRendererHandle renderer,
                                const char* effect_name,
                                const char* params,
                                OakTargetHandle source_target,
                                OakTargetHandle dest_target);
 
+/* v2 新增：显示变换（View Transform / ODT） */
+void oak_renderer_apply_display_transform(OakRendererHandle renderer,
+                                          OakTargetHandle source_target,
+                                          OakTargetHandle dest_target,
+                                          void* display_transform_handle);
+
+/* v2 新增：GPU YUV→RGBA32F ACEScg */
+void oak_renderer_blit_yuv_to_rgba(OakRendererHandle renderer,
+                                   OakTextureHandle y_tex,
+                                   OakTextureHandle u_tex,
+                                   OakTextureHandle v_tex,
+                                   OakTargetHandle dest_target,
+                                   int width, int height,
+                                   const float* color_matrix,
+                                   bool full_range,
+                                   OakFramePixelFormat pix_fmt);
+
 /* ------------------------------------------------------------------ */
-/*  Readback                                                            */
+/*  回读                                                                */
 /* ------------------------------------------------------------------ */
 
 int  oak_renderer_readback(OakRendererHandle renderer, OakTargetHandle target,
@@ -144,8 +191,14 @@ int  oak_renderer_readback(OakRendererHandle renderer, OakTargetHandle target,
                            void** out_data, int* out_stride);
 void oak_renderer_free_readback(void* data);
 
+/* v2 新增：帧级回读 */
+int oak_renderer_readback_frame(OakRendererHandle renderer,
+                                void* source, int source_type,
+                                OakFramePixelFormat out_pix_fmt,
+                                OakFrame* out_frame);
+
 /* ------------------------------------------------------------------ */
-/*  Shader interface (advanced)                                         */
+/*  Shader                                                              */
 /* ------------------------------------------------------------------ */
 
 OakShaderHandle oak_shader_compile(OakRendererHandle renderer,
@@ -161,7 +214,7 @@ void oak_renderer_draw_with_shader(OakRendererHandle renderer,
                                    OakTargetHandle dest_target);
 
 /* ------------------------------------------------------------------ */
-/*  Font atlas                                                          */
+/*  字体图集                                                            */
 /* ------------------------------------------------------------------ */
 
 OakFontAtlasHandle oak_font_load(OakRendererHandle renderer,

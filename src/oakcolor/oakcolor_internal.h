@@ -4,26 +4,28 @@
 #include "oak/color_api.h"
 
 #include <string>
+#include <memory>
 
-/* Internal C++ structures backing the C API opaque handles.
- * Will wrap OpenColorIO C++ API (OCIO::Config, OCIO::Processor, etc.). */
+#include <OpenColorIO/OpenColorIO.h>
 
 struct OakColorConfig {
-    // TODO: OCIO::ConstConfigRcPtr config;
+    OCIO_NAMESPACE::ConstConfigRcPtr config;
     std::string path;
 };
 
 struct OakColorSpace {
-    // TODO: OCIO::ConstColorSpaceRcPtr space;
+    OCIO_NAMESPACE::ConstColorSpaceRcPtr space;
     std::string name;
 };
 
 struct OakColorProcessor {
-    // TODO: OCIO::ConstProcessorRcPtr processor;
+    OCIO_NAMESPACE::ConstProcessorRcPtr processor;
+    OCIO_NAMESPACE::ConstCPUProcessorRcPtr cpu;
 };
 
 struct OakDisplayTransform {
-    // TODO: OCIO::ConstProcessorRcPtr display_processor;
+    OCIO_NAMESPACE::ConstProcessorRcPtr processor;
+    OCIO_NAMESPACE::ConstCPUProcessorRcPtr cpu;
     float exposure_fstop = 0.0f;
     float display_gamma  = 1.0f;
 };

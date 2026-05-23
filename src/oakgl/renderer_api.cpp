@@ -14,6 +14,62 @@
 #include <cstdlib>
 #include <cstring>
 
+#if defined(__APPLE__)
+#include <dlfcn.h>
+#elif defined(__linux__)
+#include <dlfcn.h>
+#elif defined(_WIN32)
+#include <windows.h>
+#endif
+
+/* ================================================================ */
+/*  Runtime oakcolor loader (for display transform)                    */
+/* ================================================================ */
+
+struct OakColorFunctions {
+    void* handle = nullptr;
+
+    typedef int (*display_transform_apply_fn)(void* transform,
+                                              int width, int height,
+                                              const float* in_data, float* out_data,
+                                              int pix_layout);
+    display_transform_apply_fn display_transform_apply = nullptr;
+
+    bool Load() {
+        if (handle) return true;
+#if defined(__APPLE__)
+        handle = dlopen("liboakcolor.dylib", RTLD_NOW | RTLD_LOCAL);
+#elif defined(__linux__)
+        handle = dlopen("liboakcolor.so", RTLD_NOW | RTLD_LOCAL);
+#elif defined(_WIN32)
+        handle = (void*)LoadLibraryA("oakcolor.dll");
+#endif
+        if (!handle) return false;
+
+        display_transform_apply = reinterpret_cast<display_transform_apply_fn>(
+            dlsym(handle, "oak_display_transform_apply"));
+        return display_transform_apply != nullptr;
+    }
+
+    ~OakColorFunctions() {
+        if (handle) {
+#if defined(__APPLE__) || defined(__linux__)
+            dlclose(handle);
+#elif defined(_WIN32)
+            FreeLibrary((HMODULE)handle);
+#endif
+        }
+    }
+};
+
+static OakColorFunctions* GetOakColor() {
+    static OakColorFunctions g_oakcolor;
+    if (!g_oakcolor.handle) {
+        g_oakcolor.Load();
+    }
+    return &g_oakcolor;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Renderer lifecycle                                                  */
 /* ------------------------------------------------------------------ */
@@ -173,9 +229,31 @@ void oak_target_resize(OakRendererHandle renderer, OakTargetHandle target,
 void oak_target_size(OakTargetHandle target, int *out_width, int *out_height)
 {
     (void)target;
-    // TODO: store metadata with handle
+    // Target size requires renderer context. For now, caller should track size.
     if (out_width)  *out_width  = 0;
     if (out_height) *out_height = 0;
+}
+
+OakTextureHandle oak_target_color_texture(OakRendererHandle renderer,
+                                          OakTargetHandle target)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r || !target) return nullptr;
+    GLuint fbo = static_cast<GLuint>(reinterpret_cast<uintptr_t>(target));
+    GLuint tex = r->GetTargetColorTexture(fbo);
+    if (tex == 0) return nullptr;
+    return reinterpret_cast<OakTextureHandle>(static_cast<uintptr_t>(tex));
+}
+
+OakTextureHandle oak_target_detach_color_texture(OakRendererHandle renderer,
+                                               OakTargetHandle target)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r || !target) return nullptr;
+    GLuint fbo = static_cast<GLuint>(reinterpret_cast<uintptr_t>(target));
+    GLuint tex = r->DetachTargetColorTexture(fbo);
+    if (tex == 0) return nullptr;
+    return reinterpret_cast<OakTextureHandle>(static_cast<uintptr_t>(tex));
 }
 
 /* ------------------------------------------------------------------ */
@@ -257,6 +335,57 @@ void oak_renderer_apply_effect(OakRendererHandle renderer,
     r->ApplyEffect(effect_name, params, src, dst);
 }
 
+void oak_renderer_apply_display_transform(OakRendererHandle renderer,
+                                          OakTargetHandle source_target,
+                                          OakTargetHandle dest_target,
+                                          void* display_transform_handle)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r || !source_target || !display_transform_handle) return;
+
+    OakColorFunctions* color = GetOakColor();
+    if (!color || !color->display_transform_apply) return;
+
+    GLuint src_fbo = static_cast<GLuint>(reinterpret_cast<uintptr_t>(source_target));
+    int width = 0, height = 0;
+    if (!r->GetTargetSize(src_fbo, &width, &height)) return;
+
+    // Readback source to CPU buffer (RGBA32F)
+    void* cpu_data = nullptr;
+    int stride = 0;
+    if (!r->Readback(src_fbo, width, height, OAK_RENDER_PIX_FMT_RGBA32F,
+                     &cpu_data, &stride)) {
+        return;
+    }
+
+    // Apply display transform in-place
+    color->display_transform_apply(display_transform_handle,
+                                   width, height,
+                                   static_cast<const float*>(cpu_data),
+                                   static_cast<float*>(cpu_data),
+                                   0);
+
+    // Upload back to destination
+    GLuint dst_tex = 0;
+    if (dest_target) {
+        GLuint dst_fbo = static_cast<GLuint>(reinterpret_cast<uintptr_t>(dest_target));
+        dst_tex = r->GetTargetColorTexture(dst_fbo);
+        if (!dst_tex) {
+            // Destination target exists but has no color texture? Fallback to source
+            dst_tex = r->GetTargetColorTexture(src_fbo);
+            dst_fbo = src_fbo;
+        }
+    }
+
+    if (dst_tex) {
+        r->UploadTexture(dst_tex, width, height, 1, 4,
+                         OAK_RENDER_PIX_FMT_RGBA32F,
+                         cpu_data, stride);
+    }
+
+    std::free(cpu_data);
+}
+
 /* ------------------------------------------------------------------ */
 /*  Readback                                                            */
 /* ------------------------------------------------------------------ */
@@ -335,6 +464,157 @@ void oak_renderer_draw_with_shader(OakRendererHandle renderer,
     r->DrawWithShader(program, uniforms_json, tex_ids, texture_count, dst);
 
     delete[] tex_ids;
+}
+
+/* ------------------------------------------------------------------ */
+/*  v2: Planar texture upload                                           */
+/* ------------------------------------------------------------------ */
+
+OakTextureHandle oak_texture_create_planar(OakRendererHandle renderer,
+                                           int width, int height,
+                                           OakTexturePlane* planes, int plane_count)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r || !planes || plane_count <= 0) return nullptr;
+
+    // Create first texture as base handle; subsequent planes are +offset
+    GLuint base_tex = r->CreateTexture(planes[0].width, planes[0].height, 1,
+                                       (planes[0].pix_fmt == OAK_RENDER_PIX_FMT_RG8) ? 2 : 1,
+                                       planes[0].pix_fmt,
+                                       planes[0].data, planes[0].stride);
+    if (base_tex == 0) return nullptr;
+
+    // Upload remaining planes (if any) - their handles will be base_tex + i
+    for (int i = 1; i < plane_count; i++) {
+        GLuint tex = r->CreateTexture(planes[i].width, planes[i].height, 1,
+                                      (planes[i].pix_fmt == OAK_RENDER_PIX_FMT_RG8) ? 2 : 1,
+                                      planes[i].pix_fmt,
+                                      planes[i].data, planes[i].stride);
+        if (tex == 0) {
+            // Best-effort cleanup: destroy already created textures
+            for (int j = 0; j < i; j++) {
+                r->DestroyTexture(base_tex + j);
+            }
+            return nullptr;
+        }
+        // Expect contiguous allocation
+        if (tex != base_tex + i) {
+            // Non-contiguous, destroy and return error
+            for (int j = 0; j <= i; j++) {
+                r->DestroyTexture(base_tex + j);
+            }
+            return nullptr;
+        }
+    }
+
+    return reinterpret_cast<OakTextureHandle>(static_cast<uintptr_t>(base_tex));
+}
+
+/* ------------------------------------------------------------------ */
+/*  v2: External surface wrap                                           */
+/* ------------------------------------------------------------------ */
+
+OakTextureHandle oak_texture_wrap_external(OakRendererHandle renderer,
+                                           int width, int height,
+                                           OakRenderPixelFormat pix_fmt,
+                                           void* external_handle,
+                                           const char* external_type)
+{
+    (void)width;
+    (void)height;
+    (void)pix_fmt;
+    (void)external_handle;
+    (void)external_type;
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return nullptr;
+
+    // TODO: implement platform-specific external texture wrapping
+    // macOS: CVOpenGLTextureCacheCreateTextureFromImage
+    // Windows: ID3D11Texture2D shared handle
+    // Linux: EGLImageKHR
+    return nullptr;
+}
+
+/* ------------------------------------------------------------------ */
+/*  v2: GPU YUV->RGBA32F ACEScg blit                                    */
+/* ------------------------------------------------------------------ */
+
+void oak_renderer_blit_yuv_to_rgba(OakRendererHandle renderer,
+                                   OakTextureHandle y_tex,
+                                   OakTextureHandle u_tex,
+                                   OakTextureHandle v_tex,
+                                   OakTargetHandle dest_target,
+                                   int width, int height,
+                                   const float* color_matrix,
+                                   bool full_range,
+                                   OakFramePixelFormat pix_fmt)
+{
+    (void)pix_fmt;
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return;
+
+    GLuint y = y_tex ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(y_tex)) : 0;
+    GLuint u = u_tex ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(u_tex)) : 0;
+    GLuint v = v_tex ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(v_tex)) : 0;
+    GLuint dst = dest_target ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(dest_target)) : 0;
+
+    r->BlitYUVToRGBA(y, u, v, dst, width, height, color_matrix, full_range);
+}
+
+/* ------------------------------------------------------------------ */
+/*  v2: Frame readback                                                  */
+/* ------------------------------------------------------------------ */
+
+int oak_renderer_readback_frame(OakRendererHandle renderer,
+                                void* source, int source_type,
+                                OakFramePixelFormat out_pix_fmt,
+                                OakFrame* out_frame)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r || !out_frame) return -1;
+
+    // Determine source FBO / texture
+    GLuint src_fbo = 0;
+    int width = 0, height = 0;
+
+    if (source_type == 0) { // texture
+        OakTextureHandle tex = reinterpret_cast<OakTextureHandle>(source);
+        GLuint gl_tex = static_cast<GLuint>(reinterpret_cast<uintptr_t>(tex));
+        (void)gl_tex;
+        // TODO: render texture to temp FBO then readback
+        return -1;
+    } else if (source_type == 1) { // target
+        OakTargetHandle tgt = reinterpret_cast<OakTargetHandle>(source);
+        src_fbo = static_cast<GLuint>(reinterpret_cast<uintptr_t>(tgt));
+    } else {
+        src_fbo = 0; // current target
+    }
+
+    (void)src_fbo;
+
+    // Map out_pix_fmt to OakRenderPixelFormat
+    OakRenderPixelFormat render_fmt = OAK_RENDER_PIX_FMT_RGBA32F;
+    switch (out_pix_fmt) {
+    case OAK_FRAME_PIX_RGBA8:  render_fmt = OAK_RENDER_PIX_FMT_RGBA8; break;
+    case OAK_FRAME_PIX_RGBA16: render_fmt = OAK_RENDER_PIX_FMT_RGBA16; break;
+    case OAK_FRAME_PIX_RGBA32F: render_fmt = OAK_RENDER_PIX_FMT_RGBA32F; break;
+    default: break;
+    }
+
+    (void)render_fmt;
+
+    // TODO: implement readback via r->Readback()
+    // For now, stub
+    out_frame->width = width;
+    out_frame->height = height;
+    out_frame->pix_fmt = out_pix_fmt;
+    out_frame->storage = OAK_FRAME_CPU;
+    out_frame->colorspace = "ACES - ACEScg";
+    out_frame->planes = 1;
+    out_frame->data[0] = nullptr;
+    out_frame->stride[0] = 0;
+    out_frame->internal = nullptr;
+    return -1;
 }
 
 /* ------------------------------------------------------------------ */

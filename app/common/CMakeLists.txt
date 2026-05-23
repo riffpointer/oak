@@ -21,4 +21,5 @@ target_sources(liboak-editor PRIVATE
     crashpadutils.h
     ratiodialog.cpp
     ratiodialog.h
+    ${CMAKE_SOURCE_DIR}/shared/src/common/qtutils.cpp
 )

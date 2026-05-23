@@ -47,6 +47,41 @@ static const char *kSolidFrag =
     "    frag_color = u_color;\n"
     "}\n";
 
+static const char *kYUVBlitVert =
+    "in vec2 a_position;\n"
+    "in vec2 a_texcoord;\n"
+    "out vec2 v_texcoord;\n"
+    "void main() {\n"
+    "    gl_Position = vec4(a_position, 0.0, 1.0);\n"
+    "    v_texcoord = a_texcoord;\n"
+    "}\n";
+
+static const char *kYUVBlitFrag =
+    "in vec2 v_texcoord;\n"
+    "out vec4 frag_color;\n"
+    "uniform sampler2D u_yTex;\n"
+    "uniform sampler2D u_uTex;\n"
+    "uniform sampler2D u_vTex;\n"
+    "uniform mat3 u_colorMatrix;\n"
+    "uniform bool u_fullRange;\n"
+    "void main() {\n"
+    "    float y = texture(u_yTex, v_texcoord).r;\n"
+    "    float u = texture(u_uTex, v_texcoord).r;\n"
+    "    float v = texture(u_vTex, v_texcoord).r;\n"
+    "    vec3 yuv;\n"
+    "    if (u_fullRange) {\n"
+    "        yuv = vec3(y, u - 0.5, v - 0.5);\n"
+    "    } else {\n"
+    "        yuv = vec3(\n"
+    "            (y - 16.0/255.0) * (255.0/219.0),\n"
+    "            (u - 128.0/255.0) * (255.0/224.0),\n"
+    "            (v - 128.0/255.0) * (255.0/224.0)\n"
+    "        );\n"
+    "    }\n"
+    "    vec3 rgb = u_colorMatrix * yuv;\n"
+    "    frag_color = vec4(rgb, 1.0);\n"
+    "}\n";
+
 static const QVector<GLfloat> kBlitVertices = {
     -1.0f, -1.0f, 0.0f,  1.0f, -1.0f, 0.0f,  1.0f, 1.0f, 0.0f,
     -1.0f, -1.0f, 0.0f, -1.0f,  1.0f, 0.0f,  1.0f, 1.0f, 0.0f
@@ -481,6 +516,37 @@ GLuint OpenGLRenderer::CreateTarget(int width, int height,
     functions_->glBindFramebuffer(GL_FRAMEBUFFER, default_fbo);
 
     return fbo;
+}
+
+GLuint OpenGLRenderer::GetTargetColorTexture(GLuint fbo)
+{
+    auto it = target_map_.find(fbo);
+    if (it != target_map_.end()) {
+        return it->color_tex;
+    }
+    return 0;
+}
+
+GLuint OpenGLRenderer::DetachTargetColorTexture(GLuint fbo)
+{
+    auto it = target_map_.find(fbo);
+    if (it != target_map_.end()) {
+        GLuint tex = it->color_tex;
+        it->color_tex = 0;
+        return tex;
+    }
+    return 0;
+}
+
+bool OpenGLRenderer::GetTargetSize(GLuint fbo, int* out_width, int* out_height)
+{
+    auto it = target_map_.find(fbo);
+    if (it != target_map_.end()) {
+        if (out_width)  *out_width  = it->width;
+        if (out_height) *out_height = it->height;
+        return true;
+    }
+    return false;
 }
 
 void OpenGLRenderer::DestroyTarget(GLuint fbo)
@@ -1054,6 +1120,113 @@ void OpenGLRenderer::DrawWithShader(GLuint program, const char *uniforms_json,
     tex_vbo.destroy();
     vao.release();
     vao.destroy();
+
+    if (dst_fbo) {
+        GLuint default_fbo = context_ ? context_->defaultFramebufferObject() : 0;
+        functions_->glBindFramebuffer(GL_FRAMEBUFFER, default_fbo);
+    }
+}
+
+void OpenGLRenderer::BlitYUVToRGBA(GLuint y_tex, GLuint u_tex, GLuint v_tex,
+                                    GLuint dst_fbo, int width, int height,
+                                    const float *color_matrix_3x3, bool full_range)
+{
+    if (!functions_) return;
+    EnsureContextCurrent("BlitYUVToRGBA");
+
+    GLuint program = CompileShader(kYUVBlitVert, kYUVBlitFrag);
+    if (!program) {
+        qWarning() << "Failed to compile YUV blit shader";
+        return;
+    }
+
+    if (dst_fbo) {
+        functions_->glBindFramebuffer(GL_FRAMEBUFFER, dst_fbo);
+    }
+    functions_->glViewport(0, 0, width, height);
+
+    functions_->glUseProgram(program);
+
+    // Bind Y/U/V textures
+    functions_->glActiveTexture(GL_TEXTURE0);
+    functions_->glBindTexture(GL_TEXTURE_2D, y_tex);
+    PrepareInputTexture(GL_TEXTURE_2D, OAK_FILTER_LINEAR);
+    GLint y_loc = functions_->glGetUniformLocation(program, "u_yTex");
+    if (y_loc != -1) functions_->glUniform1i(y_loc, 0);
+
+    functions_->glActiveTexture(GL_TEXTURE1);
+    functions_->glBindTexture(GL_TEXTURE_2D, u_tex);
+    PrepareInputTexture(GL_TEXTURE_2D, OAK_FILTER_LINEAR);
+    GLint u_loc = functions_->glGetUniformLocation(program, "u_uTex");
+    if (u_loc != -1) functions_->glUniform1i(u_loc, 1);
+
+    functions_->glActiveTexture(GL_TEXTURE2);
+    functions_->glBindTexture(GL_TEXTURE_2D, v_tex);
+    PrepareInputTexture(GL_TEXTURE_2D, OAK_FILTER_LINEAR);
+    GLint v_loc = functions_->glGetUniformLocation(program, "u_vTex");
+    if (v_loc != -1) functions_->glUniform1i(v_loc, 2);
+
+    // Set color matrix (3x3, row-major)
+    GLint mat_loc = functions_->glGetUniformLocation(program, "u_colorMatrix");
+    if (mat_loc != -1 && color_matrix_3x3) {
+        functions_->glUniformMatrix3fv(mat_loc, 1, GL_FALSE, color_matrix_3x3);
+    }
+
+    GLint range_loc = functions_->glGetUniformLocation(program, "u_fullRange");
+    if (range_loc != -1) {
+        functions_->glUniform1i(range_loc, full_range ? 1 : 0);
+    }
+
+    // Draw fullscreen quad
+    QOpenGLBuffer vert_vbo(QOpenGLBuffer::VertexBuffer);
+    vert_vbo.create();
+    vert_vbo.bind();
+    vert_vbo.allocate(kBlitVertices.constData(),
+                      kBlitVertices.size() * sizeof(GLfloat));
+    vert_vbo.release();
+
+    QOpenGLBuffer tex_vbo(QOpenGLBuffer::VertexBuffer);
+    tex_vbo.create();
+    tex_vbo.bind();
+    tex_vbo.allocate(kBlitTexcoords.constData(),
+                     kBlitTexcoords.size() * sizeof(GLfloat));
+    tex_vbo.release();
+
+    QOpenGLVertexArrayObject vao;
+    vao.create();
+    vao.bind();
+
+    GLint pos_loc = functions_->glGetAttribLocation(program, "a_position");
+    if (pos_loc != -1) {
+        vert_vbo.bind();
+        functions_->glEnableVertexAttribArray(pos_loc);
+        functions_->glVertexAttribPointer(pos_loc, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+        vert_vbo.release();
+    }
+
+    GLint tc_loc = functions_->glGetAttribLocation(program, "a_texcoord");
+    if (tc_loc != -1) {
+        tex_vbo.bind();
+        functions_->glEnableVertexAttribArray(tc_loc);
+        functions_->glVertexAttribPointer(tc_loc, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+        tex_vbo.release();
+    }
+
+    functions_->glDrawArrays(GL_TRIANGLES, 0, kBlitVertices.size() / 3);
+
+    // Cleanup
+    functions_->glUseProgram(0);
+    for (int i = 2; i >= 0; i--) {
+        functions_->glActiveTexture(GL_TEXTURE0 + i);
+        functions_->glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+    vert_vbo.destroy();
+    tex_vbo.destroy();
+    vao.release();
+    vao.destroy();
+
+    DestroyShader(program);
 
     if (dst_fbo) {
         GLuint default_fbo = context_ ? context_->defaultFramebufferObject() : 0;

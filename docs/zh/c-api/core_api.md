@@ -1,12 +1,14 @@
 # oakcore.so C API 设计
 
-> 节点图基础设施：Node/NodeGraph/NodeValue 类型系统、序列化、连接关系。
+> 节点图基础设施：Node/NodeGraph/NodeValue 类型系统、序列化、连接关系。  
+> 全链路默认：节点图内部传递的视频帧为 **RGBA32F + ACEScg**。
 
 ## 一、类型定义
 
 ```c
 #include <stdint.h>
 #include <stdbool.h>
+#include "oak/frame_api.h"   /* OakFrame */
 
 #ifdef __cplusplus
 extern "C" {
@@ -149,7 +151,7 @@ typedef enum {
     OAK_VALUE_VEC3,          // float[3]
     OAK_VALUE_VEC4,          // float[4]
     OAK_VALUE_MATRIX,        // float[16] 列主序
-    OAK_VALUE_FRAME,         // 视频帧（引用计数）
+    OAK_VALUE_FRAME,         // 视频帧（OakFrame，引用计数）
     OAK_VALUE_AUDIO_BUFFER,  // 音频缓冲区（引用计数）
     OAK_VALUE_CUSTOM = 0xFF  // 节点自定义类型，通过回调访问
 } OakValueType;
@@ -311,16 +313,15 @@ void oak_value_get_matrix(OakValueHandle value, float* out_m16);
 /**
  * @brief 提取视频帧数据。
  * @param value 值句柄，类型必须是 OAK_VALUE_FRAME。
- * @param out_width  输出图像宽度（像素）。
- * @param out_height 输出图像高度（像素）。
- * @param out_pix_fmt 输出像素格式枚举（见 oak_pixel_format 定义）。
- * @param out_data 输出数据指针（指向内部缓冲区，无需释放，但必须在 oak_value_destroy 前使用）。
- * @param out_stride 输出每行字节数。
+ * @param out_frame 输出帧描述符（浅拷贝，不转移所有权）。
+ *                  调用者**不得**修改 out_frame 的内部数据，**不得**调用 oak_frame_release。
+ *                  该帧的生命周期由 value 句柄管理，必须在 oak_value_destroy 前使用。
  * @return 0 成功，非 0 失败（类型不匹配或帧未就绪）。
+ *
+ * @note 提取出的帧默认格式为 RGBA32F + ACEScg（见 frame_api.h 全链路约定）。
+ *       若节点输出非 ACEScg 帧（如 PluginNode），out_frame->colorspace 会标记真实空间。
  */
-int oak_value_get_frame(OakValueHandle value,
-                        int* out_width, int* out_height, int* out_pix_fmt,
-                        void** out_data, int* out_stride);
+int oak_value_get_frame(OakValueHandle value, OakFrame* out_frame);
 
 /**
  * @brief 提取音频缓冲区。

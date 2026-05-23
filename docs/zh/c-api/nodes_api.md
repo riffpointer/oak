@@ -36,6 +36,7 @@ void oak_nodes_shutdown(void);
 
 ```cpp
 #include "oak/core_api.h"   // C API 头文件
+#include "oak/frame_api.h"  // OakFrame 定义
 #include "oak/node_base.h"  // C++ 基类头文件（仅在 oaknodes.so 内部可见）
 
 class BlurNode : public Node {
@@ -44,17 +45,19 @@ public:
     
     // 参数定义在构造函数中完成
     void Init() override {
-        AddInput("Input", kVideoParam);      // 输入端口
-        AddOutput("Output", kVideoParam);    // 输出端口
+        AddInput("Input", kVideoParam);      // 输入端口（期望 RGBA32F + ACEScg）
+        AddOutput("Output", kVideoParam);    // 输出端口（保证 RGBA32F + ACEScg）
         AddParam("Radius", kFloatParam, 0.0f); // 参数
     }
     
     // 求值虚函数
     NodeValue Value(const QString& output, const rational& time) override {
         auto input = GetConnectedInput("Input");
-        auto frame = input->Value(time);
+        OakFrame frame = input->Value(time);  // 输入帧为 RGBA32F + ACEScg
         float radius = GetParam("Radius").toFloat();
-        return ApplyBlur(frame, radius);
+        
+        // Blur 在 ACEScg linear 空间下是物理正确的（高斯模糊 = 卷积 = 线性操作）
+        return ApplyBlur(frame, radius);  // 输出仍为 RGBA32F + ACEScg
     }
 };
 
@@ -69,6 +72,40 @@ extern "C" int oak_nodes_init(void) {
     return 0;
 }
 ```
+
+### 2.1 节点色彩空间契约
+
+| 节点类型 | 输入期望 | 输出保证 | 特殊处理 |
+|----------|----------|----------|----------|
+| `Blur`、`Crop`、`Transform`、`Merge` | RGBA32F + ACEScg | RGBA32F + ACEScg | 无。线性空间下的合成数学正确。 |
+| `ColorCorrection`、`OCIOTransform` | RGBA32F + ACEScg | RGBA32F + ACEScg | 直接在 ACEScg 下做颜色校正。 |
+| `SolidGenerator`、`TextGenerator` | N/A | RGBA32F + ACEScg | 生成的颜色需按 ACEScg 解释。 |
+| `PluginNode`（OFX） | 依插件而定 | 依插件而定 | 若插件不支持 ACEScg，自动做输入/输出转换（见 2.2）。 |
+| `Footage`（输入节点） | N/A | RGBA32F + ACEScg | 调用 oakcodec.so，已通过 IDT 转换到 ACEScg。 |
+| `Export`（输出节点） | RGBA32F + ACEScg | N/A | 调用 oakcodec.so，通过 ODT 转换到目标空间。 |
+
+### 2.2 PluginNode 色彩空间桥接
+
+当 OFX 插件不支持 ACEScg 时，`PluginNode` 自动做以下桥接：
+
+```
+上游节点 (RGBA32F + ACEScg)
+    ↓
+[Input Bridge]  oakcolor.so: ACEScg → 插件期望空间 (如 sRGB)
+                + 格式转换: RGBA32F → RGBA8 (若插件只支持 8-bit)
+    ↓
+OFX 插件内部工作
+    ↓
+[Output Bridge] oakcolor.so: 插件空间 → ACEScg
+                + 格式转换: RGBA8 → RGBA32F
+    ↓
+下游节点 (RGBA32F + ACEScg)
+```
+
+- **Input Bridge** 由 `PluginNode::PreProcess()` 在调用 `OfxImageEffectActionRender` 前自动执行。
+- **Output Bridge** 由 `PluginNode::PostProcess()` 在插件返回后自动执行。
+- 桥接对 caller 完全透明，无需用户手动配置。
+- 桥接的源/目标色彩空间通过插件的 `kOfxImageEffectPropSupportedComponents` 和 `kOfxImageEffectPropSupportedPixelDepths` 自动推断。
 
 ## 三、内置节点类型清单（部分示例）
 
