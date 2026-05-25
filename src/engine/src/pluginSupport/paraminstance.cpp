@@ -1,0 +1,61 @@
+/*
+ * Oak Video Editor - Non-Linear Video Editor
+ * Copyright (C) 2025 Olive CE Team
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+
+#include "paraminstance.h"
+
+#include "OlivePluginInstance.h"
+#include "appcallbacks.h"
+#include "undo/undostack.h"
+
+namespace olive
+{
+namespace plugin
+{
+void SubmitUndoCommand(const std::shared_ptr<PluginNode> &node,
+					   UndoCommand *command, const QString &label)
+{
+	if (!command) {
+		return;
+	}
+
+	if (node) {
+		auto *instance = node->getPluginInstance();
+		auto *olive_instance =
+			dynamic_cast<OlivePluginInstance *>(instance);
+		if (olive_instance) {
+			olive_instance->SubmitUndoCommand(command, label);
+			return;
+		}
+	}
+
+	if (!IsGuiThread()) {
+		command->redo_now();
+		delete command;
+		return;
+	}
+
+	if (auto *cb = oak_get_app_callbacks()) {
+		if (auto *stack = cb->get_undo_stack()) {
+			stack->push(command, label);
+		}
+	}
+}
+}
+}

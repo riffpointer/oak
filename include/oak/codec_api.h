@@ -164,6 +164,9 @@ int oak_decoder_conform_audio(OakDecoderHandle decoder,
                               int target_sample_rate, int target_channels,
                               OakAudioFormat target_sample_fmt);
 
+typedef void (*OakConformReadyCallback)(void* userdata);
+void oak_conform_set_ready_callback(OakConformReadyCallback cb, void* userdata);
+
 int  oak_conform_get(const char* filename, const char* decoder_id,
                      const char* cache_path, int stream_index,
                      int target_sample_rate, int target_channels,

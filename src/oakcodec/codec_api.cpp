@@ -33,6 +33,28 @@ extern "C" {
 }
 
 /* ================================================================ */
+/*  Conform callback bridge                                           */
+/* ================================================================ */
+
+static OakConformReadyCallback g_conform_ready_cb = nullptr;
+static void* g_conform_ready_userdata = nullptr;
+static bool g_conform_callback_connected = false;
+
+static void EnsureConformCallbackConnected()
+{
+    if (g_conform_callback_connected) return;
+    olive::ConformManager *cm = olive::ConformManager::instance();
+    if (!cm) return;
+    QObject::connect(cm, &olive::ConformManager::ConformReady, [cm]() {
+        (void)cm;
+        if (g_conform_ready_cb) {
+            g_conform_ready_cb(g_conform_ready_userdata);
+        }
+    });
+    g_conform_callback_connected = true;
+}
+
+/* ================================================================ */
 /*  Helpers                                                          */
 /* ================================================================ */
 
@@ -694,6 +716,7 @@ int oak_conform_get(const char *filename, const char *decoder_id,
     if (!filename || !cache_path) return -1;
 
     olive::ConformManager::CreateInstance();
+    EnsureConformCallbackConnected();
     olive::ConformManager *cm = olive::ConformManager::instance();
 
     uint64_t layout_mask = (target_channels == 1) ? AV_CH_LAYOUT_MONO :
@@ -737,6 +760,7 @@ int oak_conform_poll(const char *filename, const char *cache_path,
     if (!filename || !cache_path) return -1;
 
     olive::ConformManager::CreateInstance();
+    EnsureConformCallbackConnected();
     olive::ConformManager *cm = olive::ConformManager::instance();
 
     uint64_t layout_mask = (target_channels == 1) ? AV_CH_LAYOUT_MONO :
@@ -749,6 +773,13 @@ int oak_conform_poll(const char *filename, const char *cache_path,
 
     olive::Decoder::CodecStream stream(QString::fromUtf8(filename), stream_index);
     return cm->Poll(QString::fromUtf8(cache_path), stream, ap);
+}
+
+void oak_conform_set_ready_callback(OakConformReadyCallback cb, void* userdata)
+{
+    g_conform_ready_cb = cb;
+    g_conform_ready_userdata = userdata;
+    EnsureConformCallbackConnected();
 }
 
 void oak_conform_free_filenames(const char **filenames, int count)

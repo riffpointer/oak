@@ -95,6 +95,18 @@ inline AVFramePtr CreateAVFramePtr()
 	return CreateAVFramePtr(av_frame_alloc());
 }
 
+/**
+ * @brief Clone an AVFrame from an opaque internal pointer (e.g. OakFrame.internal).
+ *
+ * Deep-copies the frame via av_frame_ref so the caller owns an independent reference.
+ */
+inline AVFramePtr CloneAVFramePtr(void* internal_avframe)
+{
+	AVFrame* copied = av_frame_alloc();
+	av_frame_ref(copied, static_cast<AVFrame*>(internal_avframe));
+	return CreateAVFramePtr(copied);
+}
+
 }
 
 #endif // FFMPEGABSTRACTION_H
