@@ -26,6 +26,11 @@ OakAudioBufferHandle oak_audio_buffer_create(int channels, int64_t samples,
     buf->params.channels = channels;
     buf->params.duration_samples = samples;
     buf->params.sample_rate = sample_rate;
+    buf->params.sample_fmt = OAK_AUDIO_FMT_FLT;
+    AVChannelLayout layout;
+    av_channel_layout_default(&layout, channels);
+    buf->params.channel_layout_mask = layout.u.mask;
+    av_channel_layout_uninit(&layout);
     buf->interleaved = interleaved;
     buf->data.resize(static_cast<size_t>(channels) * static_cast<size_t>(samples), 0.0f);
 
@@ -308,4 +313,248 @@ int oak_audio_convert_layout(const float* in_data, int in_channels, int64_t in_s
     }
 
     return 0;
+}
+
+/* ================================================================ */
+/*  Audio Filter Graph (FFmpeg avfilter)                                */
+/* ================================================================ */
+
+static AVSampleFormat OakAudioFmtToAV(OakAudioFormat fmt)
+{
+    switch (fmt) {
+    case OAK_AUDIO_FMT_U8:  return AV_SAMPLE_FMT_U8;
+    case OAK_AUDIO_FMT_S16: return AV_SAMPLE_FMT_S16;
+    case OAK_AUDIO_FMT_S32: return AV_SAMPLE_FMT_S32;
+    case OAK_AUDIO_FMT_FLT: return AV_SAMPLE_FMT_FLT;
+    case OAK_AUDIO_FMT_DBL: return AV_SAMPLE_FMT_DBL;
+    default:                return AV_SAMPLE_FMT_NONE;
+    }
+}
+
+static const char* AVSampleFmtNameShort(AVSampleFormat fmt)
+{
+    return av_get_sample_fmt_name(fmt);
+}
+
+OakAudioFilterGraphHandle oak_audio_filter_graph_create(const OakAudioParams* from,
+                                                        const OakAudioParams* to,
+                                                        double tempo)
+{
+    if (!from || !to || from->channels <= 0 || from->sample_rate <= 0 ||
+        to->channels <= 0 || to->sample_rate <= 0) {
+        return nullptr;
+    }
+
+    OakAudioFilterGraph* graph = new OakAudioFilterGraph();
+    graph->from_params = *from;
+    graph->to_params = *to;
+    graph->from_avfmt = OakAudioFmtToAV(from->sample_fmt);
+    graph->to_avfmt = OakAudioFmtToAV(to->sample_fmt);
+    if (graph->from_avfmt == AV_SAMPLE_FMT_NONE) graph->from_avfmt = AV_SAMPLE_FMT_FLT;
+    if (graph->to_avfmt == AV_SAMPLE_FMT_NONE)   graph->to_avfmt = AV_SAMPLE_FMT_FLT;
+
+    graph->graph = avfilter_graph_alloc();
+    if (!graph->graph) {
+        delete graph;
+        return nullptr;
+    }
+
+    char filter_args[512];
+    snprintf(filter_args, sizeof(filter_args),
+             "time_base=1/%d:sample_rate=%d:sample_fmt=%s:channel_layout=0x%" PRIx64,
+             from->sample_rate, from->sample_rate,
+             AVSampleFmtNameShort(graph->from_avfmt),
+             static_cast<uint64_t>(from->channel_layout_mask));
+
+    int r = avfilter_graph_create_filter(&graph->buffersrc_ctx,
+                                         avfilter_get_by_name("abuffer"), "in",
+                                         filter_args, nullptr, graph->graph);
+    if (r < 0) {
+        avfilter_graph_free(&graph->graph);
+        delete graph;
+        return nullptr;
+    }
+
+    AVFilterContext* previous = graph->buffersrc_ctx;
+
+    // Tempo filters
+    if (std::abs(tempo - 1.0) > 0.0001) {
+        double base = (tempo > 1.0) ? 2.0 : 0.5;
+        double speed_log = std::log(tempo) / std::log(base);
+        int whole = static_cast<int>(std::floor(speed_log));
+        speed_log -= whole;
+
+        for (int i = 0; i <= whole; i++) {
+            double filter_tempo = (i == whole) ? std::pow(base, speed_log) : base;
+            if (std::abs(filter_tempo - 1.0) < 0.0001) continue;
+
+            char speed_param[64];
+            snprintf(speed_param, sizeof(speed_param), "%f", filter_tempo);
+
+            AVFilterContext* tempo_ctx = nullptr;
+            r = avfilter_graph_create_filter(&tempo_ctx,
+                                             avfilter_get_by_name("atempo"), "atempo",
+                                             speed_param, nullptr, graph->graph);
+            if (r < 0 || avfilter_link(previous, 0, tempo_ctx, 0) < 0) {
+                avfilter_graph_free(&graph->graph);
+                delete graph;
+                return nullptr;
+            }
+            previous = tempo_ctx;
+        }
+    }
+
+    // aformat filter if conversion needed
+    if (from->sample_rate != to->sample_rate ||
+        from->channels != to->channels ||
+        graph->from_avfmt != graph->to_avfmt) {
+        snprintf(filter_args, sizeof(filter_args),
+                 "sample_fmts=%s:sample_rates=%d:channel_layouts=0x%" PRIx64,
+                 AVSampleFmtNameShort(graph->to_avfmt),
+                 to->sample_rate,
+                 static_cast<uint64_t>(to->channel_layout_mask));
+
+        AVFilterContext* fmt_ctx = nullptr;
+        r = avfilter_graph_create_filter(&fmt_ctx,
+                                         avfilter_get_by_name("aformat"), "fmt",
+                                         filter_args, nullptr, graph->graph);
+        if (r < 0 || avfilter_link(previous, 0, fmt_ctx, 0) < 0) {
+            avfilter_graph_free(&graph->graph);
+            delete graph;
+            return nullptr;
+        }
+        previous = fmt_ctx;
+    }
+
+    r = avfilter_graph_create_filter(&graph->buffersink_ctx,
+                                     avfilter_get_by_name("abuffersink"), "out",
+                                     nullptr, nullptr, graph->graph);
+    if (r < 0 || avfilter_link(previous, 0, graph->buffersink_ctx, 0) < 0) {
+        avfilter_graph_free(&graph->graph);
+        delete graph;
+        return nullptr;
+    }
+
+    r = avfilter_graph_config(graph->graph, nullptr);
+    if (r < 0) {
+        avfilter_graph_free(&graph->graph);
+        delete graph;
+        return nullptr;
+    }
+
+    graph->in_frame = av_frame_alloc();
+    graph->out_frame = av_frame_alloc();
+    if (!graph->in_frame || !graph->out_frame) {
+        avfilter_graph_free(&graph->graph);
+        delete graph;
+        return nullptr;
+    }
+
+    return graph;
+}
+
+void oak_audio_filter_graph_destroy(OakAudioFilterGraphHandle graph)
+{
+    if (!graph) return;
+    if (graph->in_frame)  av_frame_free(&graph->in_frame);
+    if (graph->out_frame) av_frame_free(&graph->out_frame);
+    if (graph->graph)     avfilter_graph_free(&graph->graph);
+    delete graph;
+}
+
+int oak_audio_filter_graph_process(OakAudioFilterGraphHandle graph,
+                                   const float** in_data, int64_t in_samples,
+                                   float** out_data, int64_t* out_samples,
+                                   int* out_channels)
+{
+    if (!graph || !graph->graph || !graph->buffersrc_ctx || !graph->buffersink_ctx) return -1;
+
+    if (in_data && in_samples > 0) {
+        AVFrame* frame = graph->in_frame;
+        av_frame_unref(frame);
+        frame->sample_rate = graph->from_params.sample_rate;
+        frame->format = graph->from_avfmt;
+        av_channel_layout_from_mask(&frame->ch_layout, graph->from_params.channel_layout_mask);
+        frame->nb_samples = static_cast<int>(in_samples);
+        frame->pts = 0;
+
+        int ret = av_frame_get_buffer(frame, 0);
+        if (ret < 0) return -1;
+
+        int ch = graph->from_params.channels;
+        if (av_sample_fmt_is_planar(graph->from_avfmt)) {
+            for (int c = 0; c < ch; c++) {
+                std::memcpy(frame->data[c], in_data[c], in_samples * sizeof(float));
+            }
+        } else {
+            std::memcpy(frame->data[0], in_data[0], in_samples * ch * sizeof(float));
+        }
+
+        ret = av_buffersrc_add_frame_flags(graph->buffersrc_ctx, frame, AV_BUFFERSRC_FLAG_KEEP_REF);
+        av_frame_unref(frame);
+        if (ret < 0) return -1;
+    }
+
+    if (!out_data || !out_samples || !out_channels) return 0;
+
+    *out_channels = graph->to_params.channels;
+    int64_t total_out_samples = 0;
+    std::vector<float> output_buffer;
+
+    while (true) {
+        av_frame_unref(graph->out_frame);
+        int ret = av_buffersink_get_frame(graph->buffersink_ctx, graph->out_frame);
+        if (ret == AVERROR(EAGAIN)) break;
+        if (ret < 0) {
+            if (ret != AVERROR_EOF) return -1;
+            break;
+        }
+
+        int nb_samples = graph->out_frame->nb_samples;
+        int out_ch = graph->to_params.channels;
+        int64_t old_size = static_cast<int64_t>(output_buffer.size());
+        int64_t new_size = old_size + static_cast<int64_t>(nb_samples) * out_ch;
+        output_buffer.resize(static_cast<size_t>(new_size));
+
+        if (av_sample_fmt_is_planar(graph->to_avfmt)) {
+            for (int s = 0; s < nb_samples; s++) {
+                for (int c = 0; c < out_ch; c++) {
+                    output_buffer[static_cast<size_t>(old_size) + s * out_ch + c] =
+                        static_cast<float*>(static_cast<void*>(graph->out_frame->data[c]))[s];
+                }
+            }
+        } else {
+            int bytes = nb_samples * out_ch * sizeof(float);
+            std::memcpy(output_buffer.data() + static_cast<size_t>(old_size),
+                        graph->out_frame->data[0], bytes);
+        }
+        av_frame_unref(graph->out_frame);
+    }
+
+    if (output_buffer.empty()) {
+        *out_data = nullptr;
+        *out_samples = 0;
+        return 0;
+    }
+
+    float* data = new float[output_buffer.size()];
+    std::memcpy(data, output_buffer.data(), output_buffer.size() * sizeof(float));
+    *out_data = data;
+    *out_samples = static_cast<int64_t>(output_buffer.size()) / *out_channels;
+    return 0;
+}
+
+int oak_audio_filter_graph_flush(OakAudioFilterGraphHandle graph,
+                                 float** out_data, int64_t* out_samples,
+                                 int* out_channels)
+{
+    if (!graph || !graph->buffersrc_ctx) return -1;
+    int ret = av_buffersrc_add_frame_flags(graph->buffersrc_ctx, nullptr, AV_BUFFERSRC_FLAG_KEEP_REF);
+    if (ret < 0) return -1;
+    return oak_audio_filter_graph_process(graph, nullptr, 0, out_data, out_samples, out_channels);
+}
+
+void oak_audio_filter_graph_free_output(float* data)
+{
+    delete[] data;
 }

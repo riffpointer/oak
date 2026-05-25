@@ -191,6 +191,48 @@ void oak_texture_size(OakTextureHandle texture, int *out_width, int *out_height)
     if (out_height) *out_height = 0;
 }
 
+static int GetChannelsFromPixelFormat(OakRenderPixelFormat fmt)
+{
+    switch (fmt) {
+    case OAK_RENDER_PIX_FMT_R8:
+    case OAK_RENDER_PIX_FMT_R16:
+    case OAK_RENDER_PIX_FMT_R32F:
+    case OAK_RENDER_PIX_FMT_R8_SNORM:
+        return 1;
+    case OAK_RENDER_PIX_FMT_RG8:
+    case OAK_RENDER_PIX_FMT_RG8_SNORM:
+        return 2;
+    case OAK_RENDER_PIX_FMT_RGBA8:
+    case OAK_RENDER_PIX_FMT_RGBA16:
+    case OAK_RENDER_PIX_FMT_RGBA32F:
+        return 4;
+    }
+    return 4;
+}
+
+int oak_texture_download(OakRendererHandle renderer, OakTextureHandle texture,
+                         int width, int height,
+                         OakRenderPixelFormat pix_fmt,
+                         void* out_data, int stride)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r || !texture || !out_data) return -1;
+    GLuint tex = static_cast<GLuint>(reinterpret_cast<uintptr_t>(texture));
+    int channels = GetChannelsFromPixelFormat(pix_fmt);
+    r->DownloadTexture(tex, width, height, 1, channels, pix_fmt, out_data, stride);
+    return 0;
+}
+
+int oak_renderer_get_pixel(OakRendererHandle renderer, OakTextureHandle texture,
+                           float x, float y, float* out_rgba)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r || !texture || !out_rgba) return -1;
+    GLuint tex = static_cast<GLuint>(reinterpret_cast<uintptr_t>(texture));
+    r->GetPixel(tex, x, y, out_rgba);
+    return 0;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Render target                                                       */
 /* ------------------------------------------------------------------ */
@@ -274,6 +316,22 @@ void oak_renderer_end(OakRendererHandle renderer)
     auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
     if (!r) return;
     r->EndFrame();
+}
+
+void oak_renderer_flush(OakRendererHandle renderer)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return;
+    r->Flush();
+}
+
+void oak_renderer_clear_texture(OakRendererHandle renderer, OakTextureHandle texture,
+                                const float* clear_color)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return;
+    GLuint tex = texture ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(texture)) : 0;
+    r->ClearTexture(tex, clear_color);
 }
 
 void oak_renderer_draw_quad(OakRendererHandle renderer,
@@ -462,6 +520,89 @@ void oak_renderer_draw_with_shader(OakRendererHandle renderer,
     }
 
     r->DrawWithShader(program, uniforms_json, tex_ids, texture_count, dst);
+
+    delete[] tex_ids;
+}
+
+void oak_renderer_draw_with_shader_to_texture(OakRendererHandle renderer,
+                                              OakShaderHandle shader,
+                                              const char *uniforms_json,
+                                              OakTextureHandle *textures, int texture_count,
+                                              OakTextureHandle dest_texture)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return;
+
+    GLuint program = shader ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(shader)) : 0;
+    GLuint dst = dest_texture ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(dest_texture)) : 0;
+
+    GLuint *tex_ids = nullptr;
+    if (texture_count > 0 && textures) {
+        tex_ids = new GLuint[texture_count];
+        for (int i = 0; i < texture_count; i++) {
+            tex_ids[i] = static_cast<GLuint>(reinterpret_cast<uintptr_t>(textures[i]));
+        }
+    }
+
+    r->DrawWithShaderToTexture(program, uniforms_json, tex_ids, texture_count, dst);
+
+    delete[] tex_ids;
+}
+
+/* ------------------------------------------------------------------ */
+/*  v2: Binary uniform descriptor (zero string overhead)                */
+/* ------------------------------------------------------------------ */
+
+void oak_renderer_draw_with_shader_ex(OakRendererHandle renderer,
+                                      OakShaderHandle shader,
+                                      const OakShaderUniform* uniforms,
+                                      int uniform_count,
+                                      OakTextureHandle* textures,
+                                      int texture_count,
+                                      OakTargetHandle dest_target)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return;
+
+    GLuint program = shader ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(shader)) : 0;
+    GLuint dst = dest_target ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(dest_target)) : 0;
+
+    GLuint *tex_ids = nullptr;
+    if (texture_count > 0 && textures) {
+        tex_ids = new GLuint[texture_count];
+        for (int i = 0; i < texture_count; i++) {
+            tex_ids[i] = static_cast<GLuint>(reinterpret_cast<uintptr_t>(textures[i]));
+        }
+    }
+
+    r->DrawWithShaderEx(program, uniforms, uniform_count, tex_ids, texture_count, dst);
+
+    delete[] tex_ids;
+}
+
+void oak_renderer_draw_with_shader_to_texture_ex(OakRendererHandle renderer,
+                                                 OakShaderHandle shader,
+                                                 const OakShaderUniform* uniforms,
+                                                 int uniform_count,
+                                                 OakTextureHandle* textures,
+                                                 int texture_count,
+                                                 OakTextureHandle dest_texture)
+{
+    auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
+    if (!r) return;
+
+    GLuint program = shader ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(shader)) : 0;
+    GLuint dst = dest_texture ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(dest_texture)) : 0;
+
+    GLuint *tex_ids = nullptr;
+    if (texture_count > 0 && textures) {
+        tex_ids = new GLuint[texture_count];
+        for (int i = 0; i < texture_count; i++) {
+            tex_ids[i] = static_cast<GLuint>(reinterpret_cast<uintptr_t>(textures[i]));
+        }
+    }
+
+    r->DrawWithShaderToTextureEx(program, uniforms, uniform_count, tex_ids, texture_count, dst);
 
     delete[] tex_ids;
 }

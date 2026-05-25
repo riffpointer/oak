@@ -72,6 +72,34 @@ void             oak_decoder_close(OakDecoderHandle decoder);
 void             oak_media_info_free(OakMediaInfo* info);
 
 /* ------------------------------------------------------------------ */
+/*  解码器创建与能力查询                                                */
+/* ------------------------------------------------------------------ */
+
+OakDecoderHandle oak_decoder_create_from_id(const char* id);
+const char*      oak_decoder_id(OakDecoderHandle decoder);
+
+/* progress callback: called during indexing/conform */
+typedef void (*OakDecoderProgressCallback)(double progress, void* userdata);
+void oak_decoder_set_progress_callback(OakDecoderHandle decoder,
+                                       OakDecoderProgressCallback cb,
+                                       void* userdata);
+int              oak_decoder_supports_video(OakDecoderHandle decoder);
+int              oak_decoder_supports_audio(OakDecoderHandle decoder);
+int              oak_decoder_is_open(OakDecoderHandle decoder);
+
+/* ------------------------------------------------------------------ */
+/*  文件探测                                                            */
+/* ------------------------------------------------------------------ */
+
+OakMediaInfo* oak_decoder_probe_file(OakDecoderHandle decoder, const char* filepath);
+
+/* ------------------------------------------------------------------ */
+/*  流打开                                                              */
+/* ------------------------------------------------------------------ */
+
+int oak_decoder_open_stream(OakDecoderHandle decoder, const char* filepath, int stream_index);
+
+/* ------------------------------------------------------------------ */
 /*  视频解码（返回 OakFrame）                                           */
 /* ------------------------------------------------------------------ */
 
@@ -85,6 +113,24 @@ int  oak_decoder_thumbnail(OakDecoderHandle decoder, int stream_index,
                            OakFrame* out_frame);
 
 /* ------------------------------------------------------------------ */
+/*  扩展视频解码参数                                                    */
+/* ------------------------------------------------------------------ */
+
+typedef struct {
+    int64_t time_num;
+    int64_t time_den;
+    int     divider;
+    int     maximum_format;  /* OakFramePixelFormat */
+    int     force_range;     /* 0=default, 1=full, 2=limited */
+    void*   renderer_hint;   /* OakRendererHandle */
+    void*   cancelled;       /* CancelAtom* */
+} OakDecoderVideoParams;
+
+int oak_decoder_read_video_ex(OakDecoderHandle decoder, int stream_index,
+                              const OakDecoderVideoParams* params,
+                              OakFrame* out_frame);
+
+/* ------------------------------------------------------------------ */
 /*  音频解码 & conform                                                  */
 /* ------------------------------------------------------------------ */
 
@@ -92,6 +138,31 @@ int  oak_decoder_read_audio(OakDecoderHandle decoder, int stream_index,
                             int64_t start_sample, int64_t sample_count,
                             float** out_data, int64_t* out_actual_samples);
 void oak_audio_buffer_free(float* data);
+
+/* ------------------------------------------------------------------ */
+/*  扩展音频解码参数                                                    */
+/* ------------------------------------------------------------------ */
+
+typedef struct {
+    int64_t start_sample;
+    int64_t sample_count;
+    int     loop_mode;       /* 0=off, 1=loop */
+    int     render_mode;     /* 0=offline, 1=online */
+    const char* cache_path;  /* NULL = no conform */
+} OakDecoderAudioParams;
+
+int oak_decoder_read_audio_ex(OakDecoderHandle decoder, int stream_index,
+                              const OakDecoderAudioParams* params,
+                              float** out_data, int64_t* out_actual_samples);
+
+/* ------------------------------------------------------------------ */
+/*  Conform                                                             */
+/* ------------------------------------------------------------------ */
+
+int oak_decoder_conform_audio(OakDecoderHandle decoder,
+                              const char* cache_path,
+                              int target_sample_rate, int target_channels,
+                              OakAudioFormat target_sample_fmt);
 
 int  oak_conform_get(const char* filename, const char* decoder_id,
                      const char* cache_path, int stream_index,

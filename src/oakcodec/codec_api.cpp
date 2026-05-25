@@ -221,20 +221,27 @@ OakDecoderHandle oak_decoder_open(const char *filepath, const char *codec_hint,
 
     if (!selected) return nullptr;
 
-    auto *wrapper = new oakcodec::OakDecoderWrapper();
+    auto* wrapper = new oakcodec::OakDecoderWrapper();
     wrapper->filepath = fn;
     wrapper->desc = desc;
     wrapper->decoder = selected;
 
+    bool opened = false;
     if (!desc.GetVideoStreams().isEmpty()) {
         const olive::VideoParams &vp = desc.GetVideoStreams().first();
         olive::Decoder::CodecStream stream(fn, vp.stream_index());
-        wrapper->decoder->Open(stream);
+        opened = wrapper->decoder->Open(stream);
     } else if (!desc.GetAudioStreams().isEmpty()) {
         const olive::AudioParams &ap = desc.GetAudioStreams().first();
         olive::Decoder::CodecStream stream(fn, ap.stream_index());
-        wrapper->decoder->Open(stream);
+        opened = wrapper->decoder->Open(stream);
     }
+
+    if (!opened) {
+        delete wrapper;
+        return nullptr;
+    }
+    wrapper->opened = true;
 
     if (out_info) {
         out_info->video_stream_count = desc.GetVideoStreams().size();
@@ -242,8 +249,7 @@ OakDecoderHandle oak_decoder_open(const char *filepath, const char *codec_hint,
         out_info->subtitle_stream_count = desc.GetSubtitleStreams().size();
 
         if (out_info->video_stream_count > 0) {
-            out_info->video_streams = (OakVideoStreamInfo *)std::malloc(
-                out_info->video_stream_count * sizeof(OakVideoStreamInfo));
+            out_info->video_streams = new OakVideoStreamInfo[out_info->video_stream_count];
             for (int i = 0; i < out_info->video_stream_count; i++) {
                 const olive::VideoParams &vp = desc.GetVideoStreams().at(i);
                 out_info->video_streams[i] = {
@@ -258,8 +264,7 @@ OakDecoderHandle oak_decoder_open(const char *filepath, const char *codec_hint,
         }
 
         if (out_info->audio_stream_count > 0) {
-            out_info->audio_streams = (OakAudioStreamInfo *)std::malloc(
-                out_info->audio_stream_count * sizeof(OakAudioStreamInfo));
+            out_info->audio_streams = new OakAudioStreamInfo[out_info->audio_stream_count];
             for (int i = 0; i < out_info->audio_stream_count; i++) {
                 const olive::AudioParams &ap = desc.GetAudioStreams().at(i);
                 out_info->audio_streams[i] = {
@@ -290,20 +295,17 @@ void oak_decoder_close(OakDecoderHandle decoder)
     if (wrapper->color_config) {
         oak_color_config_free(wrapper->color_config);
     }
+    wrapper->opened = false;
     delete wrapper;
 }
 
 void oak_media_info_free(OakMediaInfo *info)
 {
     if (!info) return;
-    if (info->video_streams) {
-        std::free(info->video_streams);
-        info->video_streams = nullptr;
-    }
-    if (info->audio_streams) {
-        std::free(info->audio_streams);
-        info->audio_streams = nullptr;
-    }
+    delete[] info->video_streams;
+    info->video_streams = nullptr;
+    delete[] info->audio_streams;
+    info->audio_streams = nullptr;
     info->video_stream_count = 0;
     info->audio_stream_count = 0;
 }
@@ -384,7 +386,7 @@ int oak_decoder_read_video(OakDecoderHandle decoder, int stream_index,
                            OakFrame* out_frame)
 {
     (void)stream_index;
-    auto *wrapper = reinterpret_cast<oakcodec::OakDecoderWrapper *>(decoder);
+    auto* wrapper = reinterpret_cast<oakcodec::OakDecoderWrapper*>(decoder);
     if (!wrapper || !wrapper->decoder || !out_frame) return -1;
 
     olive::Decoder::RetrieveVideoParams p;
@@ -561,7 +563,7 @@ int oak_decoder_thumbnail(OakDecoderHandle decoder, int stream_index,
                           OakFrame* out_frame)
 {
     (void)stream_index;
-    auto *wrapper = reinterpret_cast<oakcodec::OakDecoderWrapper *>(decoder);
+    auto* wrapper = reinterpret_cast<oakcodec::OakDecoderWrapper*>(decoder);
     if (!wrapper || !wrapper->decoder || !out_frame) return -1;
 
     std::memset(out_frame, 0, sizeof(OakFrame));
@@ -635,7 +637,7 @@ int oak_decoder_read_audio(OakDecoderHandle decoder, int stream_index,
                            float **out_data, int64_t *out_actual_samples)
 {
     (void)stream_index;
-    auto *wrapper = reinterpret_cast<oakcodec::OakDecoderWrapper *>(decoder);
+    auto* wrapper = reinterpret_cast<oakcodec::OakDecoderWrapper*>(decoder);
     if (!wrapper || !wrapper->decoder) return -1;
 
     if (wrapper->desc.GetAudioStreams().isEmpty()) return -1;
@@ -661,8 +663,7 @@ int oak_decoder_read_audio(OakDecoderHandle decoder, int stream_index,
     int channels = buffer.channel_count();
     size_t samples = buffer.sample_count();
     size_t total = channels * samples;
-    float *data = (float *)std::malloc(total * sizeof(float));
-    if (!data) return -1;
+    auto* data = new float[total];
 
     for (size_t s = 0; s < samples; s++) {
         for (int c = 0; c < channels; c++) {
@@ -677,7 +678,7 @@ int oak_decoder_read_audio(OakDecoderHandle decoder, int stream_index,
 
 void oak_audio_buffer_free(float *data)
 {
-    std::free(data);
+    delete[] data;
 }
 
 /* ---- Conform ---- */
@@ -714,11 +715,10 @@ int oak_conform_get(const char *filename, const char *decoder_id,
         if (conform.filenames.isEmpty()) {
             *out_filenames = nullptr;
         } else {
-            const char **arr = (const char **)std::malloc(
-                conform.filenames.size() * sizeof(char *));
+            auto arr = new const char*[conform.filenames.size()];
             for (int i = 0; i < conform.filenames.size(); i++) {
                 QByteArray ba = conform.filenames.at(i).toUtf8();
-                char *s = (char *)std::malloc(ba.size() + 1);
+                auto s = new char[ba.size() + 1];
                 std::memcpy(s, ba.constData(), ba.size() + 1);
                 arr[i] = s;
             }
@@ -755,9 +755,9 @@ void oak_conform_free_filenames(const char **filenames, int count)
 {
     if (!filenames) return;
     for (int i = 0; i < count; i++) {
-        std::free((void *)filenames[i]);
+        delete[] filenames[i];
     }
-    std::free((void *)filenames);
+    delete[] filenames;
 }
 
 /* ================================================================ */
@@ -950,7 +950,7 @@ int oak_encoder_write_audio(OakEncoderHandle encoder,
 {
     (void)pts_num;
     (void)pts_den;
-    auto *wrapper = reinterpret_cast<oakcodec::OakEncoderWrapper *>(encoder);
+    auto* wrapper = reinterpret_cast<oakcodec::OakEncoderWrapper*>(encoder);
     if (!wrapper || !data || samples <= 0) return -1;
 
     if (!wrapper->encoder) {
@@ -976,9 +976,407 @@ int oak_encoder_write_audio(OakEncoderHandle encoder,
 
 int oak_encoder_finalize(OakEncoderHandle encoder)
 {
-    auto *wrapper = reinterpret_cast<oakcodec::OakEncoderWrapper *>(encoder);
+    auto* wrapper = reinterpret_cast<oakcodec::OakEncoderWrapper*>(encoder);
     if (!wrapper || !wrapper->encoder) return -1;
 
     wrapper->encoder->Close();
     return 0;
+}
+
+
+/* ================================================================ */
+/*  Decoder creation & capability queries                               */
+/* ================================================================ */
+
+OakDecoderHandle oak_decoder_create_from_id(const char* id)
+{
+    if (!id || !id[0]) return nullptr;
+    olive::DecoderPtr decoder = olive::Decoder::CreateFromID(QString::fromUtf8(id));
+    if (!decoder) return nullptr;
+
+    auto* wrapper = new oakcodec::OakDecoderWrapper();
+    wrapper->decoder = decoder;
+    return reinterpret_cast<OakDecoderHandle>(wrapper);
+}
+
+const char* oak_decoder_id(OakDecoderHandle decoder)
+{
+    auto* wrapper = reinterpret_cast<oakcodec::OakDecoderWrapper*>(decoder);
+    if (!wrapper || !wrapper->decoder) return nullptr;
+    wrapper->cached_id = wrapper->decoder->id().toUtf8();
+    return wrapper->cached_id.constData();
+}
+
+void oak_decoder_set_progress_callback(OakDecoderHandle decoder,
+                                       OakDecoderProgressCallback cb,
+                                       void* userdata)
+{
+    auto* wrapper = reinterpret_cast<oakcodec::OakDecoderWrapper*>(decoder);
+    if (!wrapper) return;
+    wrapper->progress_cb = cb;
+    wrapper->progress_userdata = userdata;
+    if (wrapper->decoder) {
+        if (cb) {
+            QObject::connect(wrapper->decoder.get(), &olive::Decoder::IndexProgress,
+                             [wrapper](double p) {
+                                 if (wrapper->progress_cb) {
+                                     wrapper->progress_cb(p, wrapper->progress_userdata);
+                                 }
+                             });
+        } else {
+            QObject::disconnect(wrapper->decoder.get(), &olive::Decoder::IndexProgress,
+                                nullptr, nullptr);
+        }
+    }
+}
+
+int oak_decoder_supports_video(OakDecoderHandle decoder)
+{
+    auto* wrapper = reinterpret_cast<oakcodec::OakDecoderWrapper*>(decoder);
+    if (!wrapper || !wrapper->decoder) return 0;
+    return wrapper->decoder->SupportsVideo() ? 1 : 0;
+}
+
+int oak_decoder_supports_audio(OakDecoderHandle decoder)
+{
+    auto* wrapper = reinterpret_cast<oakcodec::OakDecoderWrapper*>(decoder);
+    if (!wrapper || !wrapper->decoder) return 0;
+    return wrapper->decoder->SupportsAudio() ? 1 : 0;
+}
+
+int oak_decoder_is_open(OakDecoderHandle decoder)
+{
+    auto* wrapper = reinterpret_cast<oakcodec::OakDecoderWrapper*>(decoder);
+    if (!wrapper || !wrapper->decoder) return 0;
+    return wrapper->opened ? 1 : 0;
+}
+
+/* ================================================================ */
+/*  File probe                                                          */
+/* ================================================================ */
+
+int oak_decoder_probe_file(OakDecoderHandle decoder, const char* filepath,
+                           OakMediaInfo* out_info)
+{
+    auto* wrapper = reinterpret_cast<oakcodec::OakDecoderWrapper*>(decoder);
+    if (!wrapper || !wrapper->decoder || !filepath) return -1;
+
+    olive::CancelAtom cancel;
+    olive::FootageDescription desc = wrapper->decoder->Probe(QString::fromUtf8(filepath), &cancel);
+    if (!desc.IsValid()) return -1;
+
+    wrapper->desc = desc;
+
+    if (out_info) {
+        out_info->video_stream_count = desc.GetVideoStreams().size();
+        out_info->audio_stream_count = desc.GetAudioStreams().size();
+        out_info->subtitle_stream_count = desc.GetSubtitleStreams().size();
+
+        if (out_info->video_stream_count > 0) {
+            out_info->video_streams = new OakVideoStreamInfo[out_info->video_stream_count];
+            for (int i = 0; i < out_info->video_stream_count; i++) {
+                const olive::VideoParams& vp = desc.GetVideoStreams().at(i);
+                out_info->video_streams[i] = {
+                    vp.width(), vp.height(),
+                    OlivePixFmtToOakFrame(vp.format(), vp.channel_count()),
+                    vp.time_base().numerator(), vp.time_base().denominator(),
+                    vp.frame_rate().toDouble(), vp.duration()
+                };
+            }
+        } else {
+            out_info->video_streams = nullptr;
+        }
+
+        if (out_info->audio_stream_count > 0) {
+            out_info->audio_streams = new OakAudioStreamInfo[out_info->audio_stream_count];
+            for (int i = 0; i < out_info->audio_stream_count; i++) {
+                const olive::AudioParams& ap = desc.GetAudioStreams().at(i);
+                out_info->audio_streams[i] = {
+                    ap.sample_rate(), ap.channel_count(),
+                    OliveAudioFmtToOak(ap.format()),
+                    ap.time_base().numerator(), ap.time_base().denominator(),
+                    ap.duration()
+                };
+            }
+        } else {
+            out_info->audio_streams = nullptr;
+        }
+    }
+
+    return 0;
+}
+
+/* ================================================================ */
+/*  Stream open                                                         */
+/* ================================================================ */
+
+int oak_decoder_open_stream(OakDecoderHandle decoder, const char* filepath, int stream_index)
+{
+    auto* wrapper = reinterpret_cast<oakcodec::OakDecoderWrapper*>(decoder);
+    if (!wrapper || !wrapper->decoder || !filepath) return -1;
+
+    olive::Decoder::CodecStream stream(QString::fromUtf8(filepath), stream_index);
+    wrapper->opened = wrapper->decoder->Open(stream);
+    return wrapper->opened ? 0 : -1;
+}
+
+/* ================================================================ */
+/*  Extended video decode                                               */
+/* ================================================================ */
+
+int oak_decoder_read_video_ex(OakDecoderHandle decoder, int stream_index,
+                              const OakDecoderVideoParams* params,
+                              OakFrame* out_frame)
+{
+    (void)stream_index;
+    auto* wrapper = reinterpret_cast<oakcodec::OakDecoderWrapper*>(decoder);
+    if (!wrapper || !wrapper->decoder || !params || !out_frame) return -1;
+
+    olive::Decoder::RetrieveVideoParams p;
+    p.time = olive::core::rational(params->time_num, params->time_den);
+    p.divider = params->divider;
+    p.maximum_format = OakFramePixFmtToOlive(static_cast<OakFramePixelFormat>(params->maximum_format));
+    p.renderer = params->renderer_hint;
+    p.cancelled = static_cast<olive::CancelAtom*>(params->cancelled);
+    if (params->force_range == 1) {
+        p.force_range = olive::VideoParams::kColorRangeFull;
+    } else if (params->force_range == 2) {
+        p.force_range = olive::VideoParams::kColorRangeLimited;
+    }
+
+    olive::AVFramePtr frame = wrapper->decoder->RetrieveVideo(p);
+    if (!frame) return -1;
+
+    std::memset(out_frame, 0, sizeof(OakFrame));
+    out_frame->width = frame->width;
+    out_frame->height = frame->height;
+    out_frame->colorspace = "ACES - ACEScg";
+    out_frame->pts_num = params->time_num;
+    out_frame->pts_den = params->time_den;
+
+    auto* frame_holder = new olive::AVFramePtr(frame);
+    out_frame->internal = frame_holder;
+
+    if (frame->format == AV_PIX_FMT_RGBAF32LE ||
+        frame->format == AV_PIX_FMT_RGBAF32BE) {
+        out_frame->pix_fmt = OAK_FRAME_PIX_RGBA32F;
+    } else if (frame->format == AV_PIX_FMT_RGBA) {
+        out_frame->pix_fmt = OAK_FRAME_PIX_RGBA8;
+    } else {
+        out_frame->pix_fmt = OAK_FRAME_PIX_INVALID;
+    }
+
+    if (params->renderer_hint) {
+        OakGLFunctions* gl = GetOakGL();
+        if (gl && gl->tex_upload && gl->blit_yuv) {
+            AVPixelFormat avfmt = static_cast<AVPixelFormat>(frame->format);
+            if (IsPlanarYUVFormat(avfmt)) {
+                int uv_w = frame->width;
+                int uv_h = frame->height;
+                if (avfmt == AV_PIX_FMT_YUV420P || avfmt == AV_PIX_FMT_YUVJ420P ||
+                    avfmt == AV_PIX_FMT_YUVA420P || avfmt == AV_PIX_FMT_YUV420P10LE ||
+                    avfmt == AV_PIX_FMT_YUV420P12LE || avfmt == AV_PIX_FMT_YUV420P16LE) {
+                    uv_w = (frame->width + 1) / 2;
+                    uv_h = (frame->height + 1) / 2;
+                } else if (avfmt == AV_PIX_FMT_YUV422P || avfmt == AV_PIX_FMT_YUVJ422P ||
+                           avfmt == AV_PIX_FMT_YUVA422P || avfmt == AV_PIX_FMT_YUV422P10LE ||
+                           avfmt == AV_PIX_FMT_YUV422P12LE || avfmt == AV_PIX_FMT_YUV422P16LE) {
+                    uv_w = (frame->width + 1) / 2;
+                }
+
+                void* y_tex = gl->tex_upload(params->renderer_hint, frame->width, frame->height,
+                                             OAK_RENDER_PIX_FMT_R8,
+                                             frame->data[0], frame->linesize[0]);
+                void* u_tex = gl->tex_upload(params->renderer_hint, uv_w, uv_h,
+                                             OAK_RENDER_PIX_FMT_R8,
+                                             frame->data[1], frame->linesize[1]);
+                void* v_tex = gl->tex_upload(params->renderer_hint, uv_w, uv_h,
+                                             OAK_RENDER_PIX_FMT_R8,
+                                             frame->data[2], frame->linesize[2]);
+
+                if (y_tex && u_tex && v_tex) {
+                    OakTargetHandle target = oak_target_create(
+                        reinterpret_cast<OakRendererHandle>(params->renderer_hint),
+                        frame->width, frame->height,
+                        OAK_RENDER_PIX_FMT_RGBA32F, false);
+
+                    if (target) {
+                        float mat3x3[9];
+                        bool full_range;
+                        GetYUVColorMatrix(frame->colorspace, frame->color_range, mat3x3, &full_range);
+
+                        gl->blit_yuv(params->renderer_hint, y_tex, u_tex, v_tex, target,
+                                     frame->width, frame->height,
+                                     mat3x3, full_range, OAK_FRAME_PIX_INVALID);
+
+                        OakTextureHandle color_tex = oak_target_detach_color_texture(
+                            reinterpret_cast<OakRendererHandle>(params->renderer_hint), target);
+
+                        oak_target_destroy(reinterpret_cast<OakRendererHandle>(params->renderer_hint), target);
+
+                        gl->tex_destroy(params->renderer_hint, y_tex);
+                        gl->tex_destroy(params->renderer_hint, u_tex);
+                        gl->tex_destroy(params->renderer_hint, v_tex);
+
+                        if (color_tex) {
+                            out_frame->storage = OAK_FRAME_GPU;
+                            out_frame->planes = 1;
+                            out_frame->pix_fmt = OAK_FRAME_PIX_RGBA32F;
+                            out_frame->data[0] = color_tex;
+                            out_frame->stride[0] = 0;
+                            return 0;
+                        }
+                    }
+                }
+
+                if (y_tex) gl->tex_destroy(params->renderer_hint, y_tex);
+                if (u_tex) gl->tex_destroy(params->renderer_hint, u_tex);
+                if (v_tex) gl->tex_destroy(params->renderer_hint, v_tex);
+            } else {
+                OakRenderPixelFormat render_fmt = OAK_RENDER_PIX_FMT_RGBA32F;
+                if (out_frame->pix_fmt == OAK_FRAME_PIX_RGBA8)  render_fmt = OAK_RENDER_PIX_FMT_RGBA8;
+                else if (out_frame->pix_fmt == OAK_FRAME_PIX_RGBA16) render_fmt = OAK_RENDER_PIX_FMT_RGBA16;
+
+                void* tex = gl->tex_upload(params->renderer_hint, frame->width, frame->height,
+                                           render_fmt,
+                                           frame->data[0], frame->linesize[0]);
+                if (tex) {
+                    out_frame->storage = OAK_FRAME_GPU;
+                    out_frame->planes = 1;
+                    out_frame->data[0] = tex;
+                    out_frame->stride[0] = 0;
+                    return 0;
+                }
+            }
+        }
+    }
+
+    // CPU path
+    out_frame->storage = OAK_FRAME_CPU;
+    out_frame->planes = 1;
+    out_frame->data[0] = frame->data[0];
+    out_frame->stride[0] = frame->linesize[0];
+
+    const char* src_cs_name = AVColorSpaceToOCIOName(frame->colorspace);
+    if (!src_cs_name) {
+        if (frame->color_primaries == AVCOL_PRI_BT709) src_cs_name = "Rec.709";
+        else if (frame->color_primaries == AVCOL_PRI_BT2020) src_cs_name = "Rec.2020";
+        else if (frame->color_primaries == AVCOL_PRI_SMPTE170M) src_cs_name = "Rec.601 (NTSC)";
+        else if (frame->color_primaries == AVCOL_PRI_SMPTE240M) src_cs_name = "SMPTE 240M";
+        else src_cs_name = "Rec.709";
+    }
+
+    if (std::strcmp(src_cs_name, "ACES - ACEScg") != 0) {
+        if (!wrapper->color_config) {
+            wrapper->color_config = oak_color_config_load(nullptr);
+        }
+        if (wrapper->color_config) {
+            if (!wrapper->color_processor ||
+                wrapper->cached_src_colorspace != QString::fromUtf8(src_cs_name)) {
+                if (wrapper->color_processor) {
+                    oak_color_processor_free(wrapper->color_processor);
+                    wrapper->color_processor = nullptr;
+                }
+                wrapper->color_processor = oak_color_processor_create(
+                    wrapper->color_config, src_cs_name, "ACES - ACEScg");
+                wrapper->cached_src_colorspace = src_cs_name;
+            }
+            if (wrapper->color_processor &&
+                (frame->format == AV_PIX_FMT_RGBAF32LE ||
+                 frame->format == AV_PIX_FMT_RGBAF32BE)) {
+                oak_color_processor_apply(
+                    wrapper->color_processor,
+                    frame->width, frame->height,
+                    reinterpret_cast<const float*>(frame->data[0]),
+                    reinterpret_cast<float*>(frame->data[0]),
+                    0);
+            }
+        }
+    }
+
+    return 0;
+}
+
+/* ================================================================ */
+/*  Extended audio decode                                               */
+/* ================================================================ */
+
+int oak_decoder_read_audio_ex(OakDecoderHandle decoder, int stream_index,
+                              const OakDecoderAudioParams* params,
+                              float** out_data, int64_t* out_actual_samples)
+{
+    (void)stream_index;
+    auto* wrapper = reinterpret_cast<oakcodec::OakDecoderWrapper*>(decoder);
+    if (!wrapper || !wrapper->decoder || !params) return -1;
+
+    if (wrapper->desc.GetAudioStreams().isEmpty()) return -1;
+    const olive::AudioParams& ap = wrapper->desc.GetAudioStreams().first();
+
+    olive::SampleBuffer buffer(ap, static_cast<size_t>(params->sample_count));
+    buffer.allocate();
+
+    olive::TimeRange range(
+        olive::core::rational(params->start_sample, ap.sample_rate()),
+        olive::core::rational(params->sample_count, ap.sample_rate()));
+
+    olive::LoopMode loop_mode = (params->loop_mode == 1)
+                                    ? olive::LoopMode::kLoopModeLoop
+                                    : olive::LoopMode::kLoopModeOff;
+    olive::RenderMode::Mode render_mode = (params->render_mode == 1)
+                                              ? olive::RenderMode::kOnline
+                                              : olive::RenderMode::kOffline;
+
+    QString cache_path = params->cache_path ? QString::fromUtf8(params->cache_path) : QString();
+
+    auto status = wrapper->decoder->RetrieveAudio(
+        buffer, range, ap, cache_path, loop_mode, render_mode);
+
+    if (status != olive::Decoder::kOK) {
+        if (out_data) *out_data = nullptr;
+        if (out_actual_samples) *out_actual_samples = 0;
+        return -1;
+    }
+
+    int channels = buffer.channel_count();
+    size_t samples = buffer.sample_count();
+    size_t total = channels * samples;
+    auto* data = new float[total];
+
+    for (size_t s = 0; s < samples; s++) {
+        for (int c = 0; c < channels; c++) {
+            data[s * channels + c] = buffer.data(c)[s];
+        }
+    }
+
+    if (out_data) *out_data = data;
+    if (out_actual_samples) *out_actual_samples = static_cast<int64_t>(samples);
+    return 0;
+}
+
+/* ================================================================ */
+/*  Conform audio                                                       */
+/* ================================================================ */
+
+int oak_decoder_conform_audio(OakDecoderHandle decoder,
+                              const char* cache_path,
+                              int target_sample_rate, int target_channels,
+                              OakAudioFormat target_sample_fmt)
+{
+    auto* wrapper = reinterpret_cast<oakcodec::OakDecoderWrapper*>(decoder);
+    if (!wrapper || !wrapper->decoder || !cache_path) return -1;
+
+    uint64_t layout_mask = (target_channels == 1) ? AV_CH_LAYOUT_MONO :
+                           (target_channels == 2) ? AV_CH_LAYOUT_STEREO :
+                           (target_channels == 6) ? AV_CH_LAYOUT_5POINT1 :
+                           (target_channels == 8) ? AV_CH_LAYOUT_7POINT1 :
+                           AV_CH_LAYOUT_STEREO;
+
+    olive::AudioParams ap(target_sample_rate, layout_mask,
+                          OakAudioFmtToOlive(target_sample_fmt));
+
+    QVector<QString> output_filenames;
+    QString base = QString::fromUtf8(cache_path);
+    output_filenames.append(base + QStringLiteral(".conform.wav"));
+
+    return wrapper->decoder->ConformAudio(output_filenames, ap, nullptr) ? 0 : -1;
 }

@@ -11,6 +11,9 @@
 extern "C" {
 #include <libswresample/swresample.h>
 #include <libavutil/channel_layout.h>
+#include <libavfilter/avfilter.h>
+#include <libavfilter/buffersrc.h>
+#include <libavfilter/buffersink.h>
 }
 
 struct OakAudioBuffer {
@@ -40,6 +43,18 @@ struct OakAudioMixer {
     int channels = 0;
     int sample_rate = 0;
     std::vector<OakAudioMixerSource> sources;
+};
+
+struct OakAudioFilterGraph {
+    AVFilterGraph* graph = nullptr;
+    AVFilterContext* buffersrc_ctx = nullptr;
+    AVFilterContext* buffersink_ctx = nullptr;
+    AVFrame* in_frame = nullptr;
+    AVFrame* out_frame = nullptr;
+    OakAudioParams from_params{};
+    OakAudioParams to_params{};
+    AVSampleFormat from_avfmt = AV_SAMPLE_FMT_NONE;
+    AVSampleFormat to_avfmt = AV_SAMPLE_FMT_NONE;
 };
 
 #endif /* OAKAUDIO_INTERNAL_H */

@@ -82,6 +82,17 @@ public:
     void DrawWithShader(GLuint program, const char *uniforms_json,
                         GLuint *textures, int tex_count, GLuint dst_fbo);
 
+    void DrawWithShaderToTexture(GLuint program, const char *uniforms_json,
+                                 GLuint *textures, int tex_count, GLuint dest_tex);
+
+    void DrawWithShaderEx(GLuint program,
+                          const OakShaderUniform *uniforms, int uniform_count,
+                          GLuint *textures, int tex_count, GLuint dst_fbo);
+
+    void DrawWithShaderToTextureEx(GLuint program,
+                                   const OakShaderUniform *uniforms, int uniform_count,
+                                   GLuint *textures, int tex_count, GLuint dest_tex);
+
     void BlitYUVToRGBA(GLuint y_tex, GLuint u_tex, GLuint v_tex,
                        GLuint dst_fbo, int width, int height,
                        const float *color_matrix_3x3, bool full_range);
@@ -96,6 +107,9 @@ public:
 
     /* ---- Pixel query ---- */
     void GetPixel(GLuint tex, float x, float y, float *out_rgba);
+
+    /* ---- Clear ---- */
+    void ClearTexture(GLuint tex, const float *clear_color);
 
     /* ---- Flush ---- */
     void Flush();

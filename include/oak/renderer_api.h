@@ -113,6 +113,16 @@ OakTextureHandle oak_texture_wrap_external(OakRendererHandle renderer,
 void oak_texture_destroy(OakRendererHandle renderer, OakTextureHandle texture);
 void oak_texture_size(OakTextureHandle texture, int* out_width, int* out_height);
 
+/* v2: texture download to CPU */
+int oak_texture_download(OakRendererHandle renderer, OakTextureHandle texture,
+                         int width, int height,
+                         OakRenderPixelFormat pix_fmt,
+                         void* out_data, int stride);
+
+/* v2: single pixel query */
+int oak_renderer_get_pixel(OakRendererHandle renderer, OakTextureHandle texture,
+                           float x, float y, float* out_rgba);
+
 /* ------------------------------------------------------------------ */
 /*  渲染目标                                                            */
 /* ------------------------------------------------------------------ */
@@ -137,6 +147,9 @@ OakTextureHandle oak_target_detach_color_texture(OakRendererHandle renderer,
 void oak_renderer_begin(OakRendererHandle renderer, OakTargetHandle target,
                         const float* clear_color);
 void oak_renderer_end(OakRendererHandle renderer);
+void oak_renderer_flush(OakRendererHandle renderer);
+void oak_renderer_clear_texture(OakRendererHandle renderer, OakTextureHandle texture,
+                                const float* clear_color);
 
 void oak_renderer_draw_quad(OakRendererHandle renderer,
                             const float* mvp_matrix,
@@ -207,11 +220,59 @@ OakShaderHandle oak_shader_compile(OakRendererHandle renderer,
                                    const char* fragment_source);
 void            oak_shader_destroy(OakRendererHandle renderer, OakShaderHandle shader);
 
+/* --- Legacy JSON-based uniform passing (kept for compatibility) --- */
 void oak_renderer_draw_with_shader(OakRendererHandle renderer,
                                    OakShaderHandle shader,
                                    const char* uniforms_json,
                                    OakTextureHandle* textures, int texture_count,
                                    OakTargetHandle dest_target);
+
+void oak_renderer_draw_with_shader_to_texture(OakRendererHandle renderer,
+                                              OakShaderHandle shader,
+                                              const char* uniforms_json,
+                                              OakTextureHandle* textures, int texture_count,
+                                              OakTextureHandle dest_texture);
+
+/* --- v2: Binary uniform descriptor (zero string overhead) --- */
+typedef enum {
+    OAK_UNIFORM_INT = 0,
+    OAK_UNIFORM_FLOAT,
+    OAK_UNIFORM_VEC2,
+    OAK_UNIFORM_VEC3,
+    OAK_UNIFORM_VEC4,
+    OAK_UNIFORM_MAT4,
+    OAK_UNIFORM_TEXTURE,
+} OakUniformType;
+
+typedef struct {
+    const char* name;
+    OakUniformType type;
+    int texture_unit;   /* valid when type == OAK_UNIFORM_TEXTURE */
+    union {
+        int   i;
+        float f;
+        float vec2[2];
+        float vec3[3];
+        float vec4[4];
+        float mat4[16];
+    } value;
+} OakShaderUniform;
+
+void oak_renderer_draw_with_shader_ex(OakRendererHandle renderer,
+                                      OakShaderHandle shader,
+                                      const OakShaderUniform* uniforms,
+                                      int uniform_count,
+                                      OakTextureHandle* textures,
+                                      int texture_count,
+                                      OakTargetHandle dest_target);
+
+void oak_renderer_draw_with_shader_to_texture_ex(OakRendererHandle renderer,
+                                                 OakShaderHandle shader,
+                                                 const OakShaderUniform* uniforms,
+                                                 int uniform_count,
+                                                 OakTextureHandle* textures,
+                                                 int texture_count,
+                                                 OakTextureHandle dest_texture);
 
 /* ------------------------------------------------------------------ */
 /*  字体图集                                                            */

@@ -9,6 +9,9 @@
 
 #include <QDateTime>
 #include <QDebug>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QOpenGLExtraFunctions>
 #include <QRegularExpression>
 #include <QThread>
@@ -766,6 +769,22 @@ void OpenGLRenderer::EndFrame()
     // Nothing to do for OpenGL, but could add fence/synchronization here
 }
 
+void OpenGLRenderer::ClearTexture(GLuint tex, const float *clear_color)
+{
+    if (!functions_) return;
+    EnsureContextCurrent("ClearTexture");
+    if (tex) {
+        AttachTextureAsDestination(tex);
+    }
+    if (clear_color) {
+        ClearDestinationInternal(clear_color[0], clear_color[1],
+                                 clear_color[2], clear_color[3]);
+    }
+    if (tex) {
+        DetachTextureAsDestination();
+    }
+}
+
 void OpenGLRenderer::PrepareInputTexture(GLenum target, OakFilterMode filter)
 {
     switch (filter) {
@@ -1053,7 +1072,6 @@ void OpenGLRenderer::ApplyEffect(const char *effect_name, const char *params,
 void OpenGLRenderer::DrawWithShader(GLuint program, const char *uniforms_json,
                                     GLuint *textures, int tex_count, GLuint dst_fbo)
 {
-    (void)uniforms_json;
     if (!program) return;
 
     if (dst_fbo) {
@@ -1069,9 +1087,58 @@ void OpenGLRenderer::DrawWithShader(GLuint program, const char *uniforms_json,
         PrepareInputTexture(GL_TEXTURE_2D, OAK_FILTER_LINEAR);
     }
 
-    // TODO: parse uniforms_json and set uniform values
-    // For now, caller must set uniforms manually through the C API or
-    // we can extend this later with a JSON parser
+    // Parse uniforms_json and set uniform values
+    if (uniforms_json && uniforms_json[0]) {
+        QJsonDocument doc = QJsonDocument::fromJson(QByteArray(uniforms_json));
+        if (!doc.isNull() && doc.isObject()) {
+            QJsonObject obj = doc.object();
+            for (auto it = obj.begin(); it != obj.end(); ++it) {
+                const QString name = it.key();
+                const QJsonValue val = it.value();
+                if (!val.isObject()) continue;
+                QJsonValue type_v = val.toObject().value(QStringLiteral("type"));
+                if (!type_v.isString()) continue;
+                QString type = type_v.toString();
+                GLint loc = functions_->glGetUniformLocation(program, name.toUtf8().constData());
+                if (loc < 0) continue;
+                if (type == QLatin1String("texture")) {
+                    int unit = val.toObject().value(QStringLiteral("unit")).toInt(0);
+                    functions_->glUniform1i(loc, unit);
+                } else if (type == QLatin1String("int")) {
+                    int v = val.toObject().value(QStringLiteral("value")).toInt(0);
+                    functions_->glUniform1i(loc, v);
+                } else if (type == QLatin1String("float")) {
+                    double v = val.toObject().value(QStringLiteral("value")).toDouble(0.0);
+                    functions_->glUniform1f(loc, static_cast<GLfloat>(v));
+                } else if (type == QLatin1String("vec2")) {
+                    QJsonArray arr = val.toObject().value(QStringLiteral("value")).toArray();
+                    GLfloat fv[2] = { static_cast<GLfloat>(arr.size() > 0 ? arr[0].toDouble() : 0.0),
+                                      static_cast<GLfloat>(arr.size() > 1 ? arr[1].toDouble() : 0.0) };
+                    functions_->glUniform2fv(loc, 1, fv);
+                } else if (type == QLatin1String("vec3")) {
+                    QJsonArray arr = val.toObject().value(QStringLiteral("value")).toArray();
+                    GLfloat fv[3] = { static_cast<GLfloat>(arr.size() > 0 ? arr[0].toDouble() : 0.0),
+                                      static_cast<GLfloat>(arr.size() > 1 ? arr[1].toDouble() : 0.0),
+                                      static_cast<GLfloat>(arr.size() > 2 ? arr[2].toDouble() : 0.0) };
+                    functions_->glUniform3fv(loc, 1, fv);
+                } else if (type == QLatin1String("vec4")) {
+                    QJsonArray arr = val.toObject().value(QStringLiteral("value")).toArray();
+                    GLfloat fv[4] = { static_cast<GLfloat>(arr.size() > 0 ? arr[0].toDouble() : 0.0),
+                                      static_cast<GLfloat>(arr.size() > 1 ? arr[1].toDouble() : 0.0),
+                                      static_cast<GLfloat>(arr.size() > 2 ? arr[2].toDouble() : 0.0),
+                                      static_cast<GLfloat>(arr.size() > 3 ? arr[3].toDouble() : 0.0) };
+                    functions_->glUniform4fv(loc, 1, fv);
+                } else if (type == QLatin1String("mat4")) {
+                    QJsonArray arr = val.toObject().value(QStringLiteral("value")).toArray();
+                    GLfloat fv[16];
+                    for (int i = 0; i < 16; ++i) {
+                        fv[i] = static_cast<GLfloat>(i < arr.size() ? arr[i].toDouble() : (i % 5 == 0 ? 1.0 : 0.0));
+                    }
+                    functions_->glUniformMatrix4fv(loc, 1, GL_FALSE, fv);
+                }
+            }
+        }
+    }
 
     // Draw fullscreen quad
     QOpenGLBuffer vert_vbo(QOpenGLBuffer::VertexBuffer);
@@ -1125,6 +1192,136 @@ void OpenGLRenderer::DrawWithShader(GLuint program, const char *uniforms_json,
         GLuint default_fbo = context_ ? context_->defaultFramebufferObject() : 0;
         functions_->glBindFramebuffer(GL_FRAMEBUFFER, default_fbo);
     }
+}
+
+void OpenGLRenderer::DrawWithShaderToTexture(GLuint program, const char *uniforms_json,
+                                              GLuint *textures, int tex_count,
+                                              GLuint dest_tex)
+{
+    if (!functions_ || !framebuffer_) return;
+    functions_->glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
+    functions_->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                       GL_TEXTURE_2D, dest_tex, 0);
+    DrawWithShader(program, uniforms_json, textures, tex_count, 0);
+    GLuint default_fbo = context_ ? context_->defaultFramebufferObject() : 0;
+    functions_->glBindFramebuffer(GL_FRAMEBUFFER, default_fbo);
+}
+
+void OpenGLRenderer::DrawWithShaderEx(GLuint program,
+                                      const OakShaderUniform *uniforms, int uniform_count,
+                                      GLuint *textures, int tex_count, GLuint dst_fbo)
+{
+    if (!program) return;
+
+    if (dst_fbo) {
+        functions_->glBindFramebuffer(GL_FRAMEBUFFER, dst_fbo);
+    }
+
+    functions_->glUseProgram(program);
+
+    // Bind textures
+    for (int i = 0; i < tex_count; i++) {
+        functions_->glActiveTexture(GL_TEXTURE0 + i);
+        functions_->glBindTexture(GL_TEXTURE_2D, textures[i]);
+        PrepareInputTexture(GL_TEXTURE_2D, OAK_FILTER_LINEAR);
+    }
+
+    // Apply binary uniforms
+    for (int i = 0; i < uniform_count; i++) {
+        const OakShaderUniform &u = uniforms[i];
+        GLint loc = functions_->glGetUniformLocation(program, u.name);
+        if (loc < 0) continue;
+        switch (u.type) {
+        case OAK_UNIFORM_TEXTURE:
+            functions_->glUniform1i(loc, u.texture_unit);
+            break;
+        case OAK_UNIFORM_INT:
+            functions_->glUniform1i(loc, u.value.i);
+            break;
+        case OAK_UNIFORM_FLOAT:
+            functions_->glUniform1f(loc, u.value.f);
+            break;
+        case OAK_UNIFORM_VEC2:
+            functions_->glUniform2fv(loc, 1, u.value.vec2);
+            break;
+        case OAK_UNIFORM_VEC3:
+            functions_->glUniform3fv(loc, 1, u.value.vec3);
+            break;
+        case OAK_UNIFORM_VEC4:
+            functions_->glUniform4fv(loc, 1, u.value.vec4);
+            break;
+        case OAK_UNIFORM_MAT4:
+            functions_->glUniformMatrix4fv(loc, 1, GL_FALSE, u.value.mat4);
+            break;
+        }
+    }
+
+    // Draw fullscreen quad
+    QOpenGLBuffer vert_vbo(QOpenGLBuffer::VertexBuffer);
+    vert_vbo.create();
+    vert_vbo.bind();
+    vert_vbo.allocate(kBlitVertices.constData(),
+                      kBlitVertices.size() * sizeof(GLfloat));
+    vert_vbo.release();
+
+    QOpenGLBuffer tex_vbo(QOpenGLBuffer::VertexBuffer);
+    tex_vbo.create();
+    tex_vbo.bind();
+    tex_vbo.allocate(kBlitTexcoords.constData(),
+                     kBlitTexcoords.size() * sizeof(GLfloat));
+    tex_vbo.release();
+
+    QOpenGLVertexArrayObject vao;
+    vao.create();
+    vao.bind();
+
+    GLint vertex_loc = functions_->glGetAttribLocation(program, "a_position");
+    if (vertex_loc != -1) {
+        vert_vbo.bind();
+        functions_->glEnableVertexAttribArray(vertex_loc);
+        functions_->glVertexAttribPointer(vertex_loc, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+        vert_vbo.release();
+    }
+
+    GLint texcoord_loc = functions_->glGetAttribLocation(program, "a_texcoord");
+    if (texcoord_loc != -1) {
+        tex_vbo.bind();
+        functions_->glEnableVertexAttribArray(texcoord_loc);
+        functions_->glVertexAttribPointer(texcoord_loc, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+        tex_vbo.release();
+    }
+
+    functions_->glDrawArrays(GL_TRIANGLES, 0, kBlitVertices.size() / 3);
+
+    functions_->glUseProgram(0);
+    for (int i = tex_count - 1; i >= 0; i--) {
+        functions_->glActiveTexture(GL_TEXTURE0 + i);
+        functions_->glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+    vert_vbo.destroy();
+    tex_vbo.destroy();
+    vao.release();
+    vao.destroy();
+
+    if (dst_fbo) {
+        GLuint default_fbo = context_ ? context_->defaultFramebufferObject() : 0;
+        functions_->glBindFramebuffer(GL_FRAMEBUFFER, default_fbo);
+    }
+}
+
+void OpenGLRenderer::DrawWithShaderToTextureEx(GLuint program,
+                                               const OakShaderUniform *uniforms, int uniform_count,
+                                               GLuint *textures, int tex_count,
+                                               GLuint dest_tex)
+{
+    if (!functions_ || !framebuffer_) return;
+    functions_->glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
+    functions_->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                       GL_TEXTURE_2D, dest_tex, 0);
+    DrawWithShaderEx(program, uniforms, uniform_count, textures, tex_count, 0);
+    GLuint default_fbo = context_ ? context_->defaultFramebufferObject() : 0;
+    functions_->glBindFramebuffer(GL_FRAMEBUFFER, default_fbo);
 }
 
 void OpenGLRenderer::BlitYUVToRGBA(GLuint y_tex, GLuint u_tex, GLuint v_tex,

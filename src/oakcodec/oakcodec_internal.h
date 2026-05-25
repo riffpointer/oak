@@ -16,11 +16,17 @@ struct OakDecoderWrapper {
     olive::DecoderPtr decoder;
     olive::FootageDescription desc;
     QString filepath;
+    bool opened = false;
+    QByteArray cached_id;
 
     // Cached color management objects for IDT
     OakColorConfigHandle color_config = nullptr;
     OakColorProcessorHandle color_processor = nullptr;
     QString cached_src_colorspace;
+
+    // Progress callback
+    OakDecoderProgressCallback progress_cb = nullptr;
+    void* progress_userdata = nullptr;
 };
 
 struct OakEncoderWrapper {
