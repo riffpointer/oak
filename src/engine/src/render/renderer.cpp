@@ -26,6 +26,8 @@
 #include <QTimer>
 #include <QVector2D>
 
+#include "runtime/oak_color_runtime.h"
+
 namespace olive
 {
 
@@ -192,7 +194,7 @@ TexturePtr Renderer::CreateTextureFromNativeHandle(const QVariant &v,
 }
 
 bool Renderer::GetColorContext(const ColorTransformJob &color_job,
-							   Renderer::ColorContext *ctx)
+									   Renderer::ColorContext *ctx)
 {
 	QMutexLocker locker(&color_cache_mutex_);
 
@@ -204,6 +206,16 @@ bool Renderer::GetColorContext(const ColorTransformJob &color_job,
 		color_ctx = color_cache_.value(proc_id);
 		return true;
 	} else {
+		auto rt = OakColorRuntime::Instance();
+		if (!rt->Load()) {
+			return false;
+		}
+
+		void* processor_handle = color_job.GetColorProcessor()->GetProcessorHandle();
+		if (!processor_handle) {
+			return false;
+		}
+
 		// Create shader description
 		QString ocio_func_name;
 		if (color_job.GetFunctionName().isEmpty()) {
@@ -211,57 +223,57 @@ bool Renderer::GetColorContext(const ColorTransformJob &color_job,
 		} else {
 			ocio_func_name = color_job.GetFunctionName();
 		}
-		auto shader_desc = OCIO::GpuShaderDesc::CreateShaderDesc();
-		shader_desc->setLanguage(OCIO::GPU_LANGUAGE_GLSL_ES_3_0);
-		shader_desc->setFunctionName(ocio_func_name.toUtf8());
-		shader_desc->setResourcePrefix("ocio_");
 
-		// Generate shader
-		color_job.GetColorProcessor()
-			->GetProcessor()
-			->getDefaultGPUProcessor()
-			->extractGpuShaderInfo(shader_desc);
+		OakColorGPUShaderHandle shader = rt->gpu_shader_create(
+			static_cast<OakColorProcessorHandle>(processor_handle),
+			ocio_func_name.toUtf8().constData(),
+			"ocio_");
+		if (!shader) {
+			return false;
+		}
+
+		const char* shader_text = rt->gpu_shader_get_text(shader);
+		if (!shader_text) {
+			rt->gpu_shader_free(shader);
+			return false;
+		}
 
 		ShaderCode code;
 		if (const Node *shader_src = color_job.CustomShaderSource()) {
 			// Use shader code from associated node
 			code = shader_src->GetShaderCode(
-				{ color_job.CustomShaderID(), shader_desc->getShaderText() });
+				{ color_job.CustomShaderID(), QString::fromUtf8(shader_text) });
 		} else {
 			// Generate shader code using OCIO stub and our auto-generated name
 			code = FileFunctions::ReadFileAsString(
 				QStringLiteral(":shaders/colormanage.frag"));
 			code.set_frag_code(
-				code.frag_code().arg(shader_desc->getShaderText()));
+				code.frag_code().arg(QString::fromUtf8(shader_text)));
 		}
 
 		// Try to compile shader
 		color_ctx.compiled_shader = CreateNativeShader(code);
 
 		if (color_ctx.compiled_shader.isNull()) {
+			rt->gpu_shader_free(shader);
 			return false;
 		}
 
-		color_ctx.lut3d_textures.resize(shader_desc->getNum3DTextures());
-		for (unsigned int i = 0; i < shader_desc->getNum3DTextures(); i++) {
+		int num_3d = rt->gpu_shader_get_3d_lut_count(shader);
+		color_ctx.lut3d_textures.resize(num_3d);
+		for (int i = 0; i < num_3d; i++) {
 			const char *tex_name = nullptr;
 			const char *sampler_name = nullptr;
 			unsigned int edge_len = 0;
-			OCIO::Interpolation interpolation = OCIO::INTERP_LINEAR;
-
-			shader_desc->get3DTexture(i, tex_name, sampler_name, edge_len,
-									  interpolation);
-
-			if (!tex_name || !*tex_name || !sampler_name || !*sampler_name ||
-				!edge_len) {
-				qCritical() << "3D LUT texture data is corrupted";
-				return false;
-			}
-
+			int interpolation = 1;
 			const float *values = nullptr;
-			shader_desc->get3DTextureValues(i, values);
-			if (!values) {
-				qCritical() << "3D LUT texture values are missing";
+
+			if (rt->gpu_shader_get_3d_lut(shader, i, &tex_name, &sampler_name,
+										  &edge_len, &interpolation, &values) != 0 ||
+				!tex_name || !*tex_name || !sampler_name || !*sampler_name ||
+				!edge_len || !values) {
+				qCritical() << "3D LUT texture data is corrupted";
+				rt->gpu_shader_free(shader);
 				return false;
 			}
 
@@ -272,50 +284,41 @@ bool Renderer::GetColorContext(const ColorTransformJob &color_job,
 				values);
 			color_ctx.lut3d_textures[i].name = sampler_name;
 			color_ctx.lut3d_textures[i].interpolation =
-				(interpolation == OCIO::INTERP_NEAREST) ? Texture::kNearest :
-														  Texture::kLinear;
+				(interpolation == 0) ? Texture::kNearest : Texture::kLinear;
 		}
 
-		color_ctx.lut1d_textures.resize(shader_desc->getNumTextures());
-		for (unsigned int i = 0; i < shader_desc->getNumTextures(); i++) {
+		int num_tex = rt->gpu_shader_get_texture_count(shader);
+		color_ctx.lut1d_textures.resize(num_tex);
+		for (int i = 0; i < num_tex; i++) {
 			const char *tex_name = nullptr;
 			const char *sampler_name = nullptr;
 			unsigned int width = 0, height = 0;
-			OCIO::GpuShaderDesc::TextureType channel =
-				OCIO::GpuShaderDesc::TEXTURE_RGB_CHANNEL;
-			OCIO::Interpolation interpolation = OCIO::INTERP_LINEAR;
-			OCIO::GpuShaderDesc::TextureDimensions dimensions =
-				OCIO::GpuShaderDesc::TEXTURE_2D;
-			shader_desc->getTexture(i, tex_name, sampler_name, width, height,
-									channel, dimensions, interpolation);
-
-			if (!tex_name || !*tex_name || !sampler_name || !*sampler_name ||
-				!width) {
-				qCritical() << "1D LUT texture data is corrupted";
-				return false;
-			}
-
+			int channel_count = 3;
+			int dimensions = 2;
+			int interpolation = 1;
 			const float *values = nullptr;
-			shader_desc->getTextureValues(i, values);
-			if (!values) {
-				qCritical() << "1D LUT texture values are missing";
+
+			if (rt->gpu_shader_get_texture(shader, i, &tex_name, &sampler_name,
+										   &width, &height, &channel_count,
+										   &dimensions, &interpolation,
+										   &values) != 0 ||
+				!tex_name || !*tex_name || !sampler_name || !*sampler_name ||
+				!width || !values) {
+				qCritical() << "1D LUT texture data is corrupted";
+				rt->gpu_shader_free(shader);
 				return false;
 			}
 
-			// Allocate 1D LUT
+			// Allocate 1D/2D LUT
 			color_ctx.lut1d_textures[i].texture = CreateTexture(
-				VideoParams(width, height, PixelFormat::F32,
-							(channel ==
-							 OCIO::GpuShaderDesc::TEXTURE_RED_CHANNEL) ?
-								1 :
-								VideoParams::kRGBChannelCount),
+				VideoParams(width, height, PixelFormat::F32, channel_count),
 				values);
 			color_ctx.lut1d_textures[i].name = sampler_name;
 			color_ctx.lut1d_textures[i].interpolation =
-				(interpolation == OCIO::INTERP_NEAREST) ? Texture::kNearest :
-														  Texture::kLinear;
+				(interpolation == 0) ? Texture::kNearest : Texture::kLinear;
 		}
 
+		rt->gpu_shader_free(shader);
 		color_cache_.insert(proc_id, color_ctx);
 
 		return true;

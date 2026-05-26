@@ -23,9 +23,9 @@
 
 #include <iostream>
 
-#include "olive/common/ocioutils.h"
 #include "node/project.h"
 #include "render/colorprocessor.h"
+#include "runtime/oak_color_runtime.h"
 #include "olive/common/paramdisplay.h"
 
 namespace olive
@@ -162,16 +162,26 @@ void OCIOGradingTransformLinearNode::InputValueChangedEvent(
 void OCIOGradingTransformLinearNode::GenerateProcessor()
 {
 	if (manager()) {
-		OCIO::GradingPrimaryTransformRcPtr gp =
-			OCIO::GradingPrimaryTransform::Create(OCIO::GRADING_LIN);
-		gp->makeDynamic();
-		gp->setDirection(OCIO::TransformDirection::TRANSFORM_DIR_FORWARD);
+		auto rt = OakColorRuntime::Instance();
+		if (!rt->Load()) return;
 
-		try {
-			set_processor(ColorProcessor::Create(
-				manager()->GetConfig()->getProcessor(gp)));
-		} catch (const OCIO::Exception &e) {
-			std::cerr << std::endl << e.what() << std::endl;
+		OakColorGradingPrimaryHandle gp = rt->grading_primary_create(0); // lin
+		if (!gp) return;
+
+		rt->grading_primary_set_dynamic(gp, true);
+		rt->grading_primary_set_direction(gp, 0); // forward
+
+		void* processor = rt->processor_create_from_grading(
+			static_cast<OakColorConfigHandle>(manager()->GetConfigHandle()),
+			nullptr, /* input/output determined by transform internals */
+			nullptr,
+			gp,
+			0);
+
+		rt->grading_primary_free(gp);
+
+		if (processor) {
+			set_processor(ColorProcessor::Create(processor));
 		}
 	}
 }
@@ -230,15 +240,21 @@ void OCIOGradingTransformLinearNode::Value(const NodeValueRow &value,
 										   contrast[BLUE_CHANNEL])));
 
 			if (!value[kClampBlackEnableInput].toBool()) {
-				job.Insert(kClampBlackInput,
-						   NodeValue(NodeValue::kFloat,
-									 OCIO::GradingPrimary::NoClampBlack()));
+				auto rt = OakColorRuntime::Instance();
+				if (rt->Load()) {
+					job.Insert(kClampBlackInput,
+							   NodeValue(NodeValue::kFloat,
+										 rt->grading_primary_no_clamp_black()));
+				}
 			}
 
 			if (!value[kClampWhiteEnableInput].toBool()) {
-				job.Insert(kClampWhiteInput,
-						   NodeValue(NodeValue::kFloat,
-									 OCIO::GradingPrimary::NoClampWhite()));
+				auto rt = OakColorRuntime::Instance();
+				if (rt->Load()) {
+					job.Insert(kClampWhiteInput,
+							   NodeValue(NodeValue::kFloat,
+										 rt->grading_primary_no_clamp_white()));
+				}
 			}
 
 			table->Push(NodeValue::kTexture, tex->toJob(job), this);

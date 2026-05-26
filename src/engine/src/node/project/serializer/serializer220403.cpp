@@ -594,9 +594,9 @@ void ProjectSerializer220403::LoadColorManager(QXmlStreamReader *reader,
 				} else if (id == QStringLiteral("reference_space")) {
 					// Reference space
 					if (value == QStringLiteral("1")) {
-						value = OCIO::ROLE_COMPOSITING_LOG;
+						value = QStringLiteral("compositing_log");
 					} else {
-						value = OCIO::ROLE_SCENE_LINEAR;
+						value = QStringLiteral("scene_linear");
 					}
 					project->SetColorReferenceSpace(value);
 				} else {

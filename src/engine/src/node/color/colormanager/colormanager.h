@@ -40,13 +40,13 @@ public:
 
 	void Init();
 
-	OCIO::ConstConfigRcPtr GetConfig() const;
+	void* GetConfigHandle() const;
 
-	static OCIO::ConstConfigRcPtr CreateConfigFromFile(const QString &filename);
+	static void* CreateConfigFromFile(const QString &filename);
 
 	QString GetConfigFilename() const;
 
-	static OCIO::ConstConfigRcPtr GetDefaultConfig();
+	static void* GetDefaultConfigHandle();
 
 	static void SetUpDefaultConfig();
 
@@ -73,9 +73,9 @@ public:
 	QString GetCompliantColorSpace(const QString &s);
 
 	ColorTransform GetCompliantColorSpace(const ColorTransform &transform,
-										  bool force_display = false);
+									  bool force_display = false);
 
-	static QStringList ListAvailableColorspaces(OCIO::ConstConfigRcPtr config);
+	static QStringList ListAvailableColorspaces(void* config_handle);
 
 	void GetDefaultLumaCoefs(double *rgb) const;
 
@@ -91,9 +91,9 @@ signals:
 	void DefaultInputChanged(const QString &s);
 
 private:
-	OCIO::ConstConfigRcPtr config_;
+	void* config_;
 
-	static OCIO::ConstConfigRcPtr default_config_;
+	static void* default_config_;
 };
 
 }

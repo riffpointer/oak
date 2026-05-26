@@ -24,6 +24,7 @@
 
 #include <olive/core/core.h>
 
+#include "olive/render/videoparams.h"
 #include "colortransform.h"
 
 namespace olive

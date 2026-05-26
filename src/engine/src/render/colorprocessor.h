@@ -23,7 +23,6 @@
 #define COLORPROCESSOR_H
 
 #include "olive/render/frame.h"
-#include "olive/common/ocioutils.h"
 #include "render/colortransform.h"
 
 namespace olive
@@ -41,31 +40,26 @@ public:
 	ColorProcessor(ColorManager *config, const QString &input,
 				   const ColorTransform &dest_space,
 				   Direction direction = kNormal);
-	ColorProcessor(OCIO::ConstProcessorRcPtr processor);
+	ColorProcessor(void* oak_processor_handle);
 
 	DISABLE_COPY_MOVE(ColorProcessor)
 
 	static ColorProcessorPtr Create(ColorManager *config, const QString &input,
 									const ColorTransform &dest_space,
 									Direction direction = kNormal);
-	static ColorProcessorPtr Create(OCIO::ConstProcessorRcPtr processor);
+	static ColorProcessorPtr Create(void* oak_processor_handle);
 
-	OCIO::ConstProcessorRcPtr GetProcessor();
+	void* GetProcessorHandle();
 
 	void ConvertFrame(FramePtr f);
 	void ConvertFrame(Frame *f);
 
 	Color ConvertColor(const Color &in);
 
-	const char *id() const
-	{
-		return processor_->getCacheID();
-	}
+	const char *id() const;
 
 private:
-	OCIO::ConstProcessorRcPtr processor_;
-
-	OCIO::ConstCPUProcessorRcPtr cpu_processor_;
+	void* processor_handle_;
 };
 
 using ColorProcessorChain = QVector<ColorProcessorPtr>;

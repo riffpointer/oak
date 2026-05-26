@@ -22,8 +22,8 @@
 #include "colorprocessor.h"
 
 #include "olive/common/define.h"
-#include "olive/common/ocioutils.h"
 #include "node/color/colormanager/colormanager.h"
+#include "runtime/oak_color_runtime.h"
 
 namespace olive
 {
@@ -32,96 +32,86 @@ ColorProcessor::ColorProcessor(ColorManager *config, const QString &input,
 							   const ColorTransform &transform,
 							   Direction direction)
 {
+	auto rt = OakColorRuntime::Instance();
+	if (!rt->Load()) {
+		processor_handle_ = nullptr;
+		return;
+	}
+
 	const QString &output = (transform.output().isEmpty()) ?
 								config->GetDefaultDisplay() :
 								transform.output();
+
+	int dir = (direction == kNormal) ? 0 : 1;
 
 	if (transform.is_display()) {
 		const QString &view = (transform.view().isEmpty()) ?
 								  config->GetDefaultView(output) :
 								  transform.view();
 
-		auto display_transform = OCIO::DisplayViewTransform::Create();
-
-		display_transform->setSrc(input.toUtf8());
-		display_transform->setDisplay(output.toUtf8());
-		display_transform->setView(view.toUtf8());
-		display_transform->setDirection(direction == kNormal ?
-											OCIO::TRANSFORM_DIR_FORWARD :
-											OCIO::TRANSFORM_DIR_INVERSE);
-
-		if (transform.look().isEmpty()) {
-			processor_ = config->GetConfig()->getProcessor(display_transform);
-		} else {
-			auto group = OCIO::GroupTransform::Create();
-
-			const char *out_cs = OCIO::LookTransform::GetLooksResultColorSpace(
-				config->GetConfig(), config->GetConfig()->getCurrentContext(),
-				transform.look().toUtf8());
-
-			auto lt = OCIO::LookTransform::Create();
-			lt->setSrc(input.toUtf8());
-			lt->setDst(out_cs);
-			lt->setLooks(transform.look().toUtf8());
-			lt->setSkipColorSpaceConversion(false);
-			group->appendTransform(lt);
-
-			display_transform->setSrc(out_cs);
-			group->appendTransform(display_transform);
-
-			processor_ = config->GetConfig()->getProcessor(group);
-		}
-
+		processor_handle_ = rt->processor_create_display(
+			static_cast<OakColorConfigHandle>(config->GetConfigHandle()),
+			input.toUtf8().constData(),
+			output.toUtf8().constData(),
+			view.toUtf8().constData(),
+			transform.look().isEmpty() ? nullptr : transform.look().toUtf8().constData(),
+			dir);
 	} else {
-		try {
-			if (direction == kNormal) {
-				processor_ = config->GetConfig()->getProcessor(input.toUtf8(),
-															   output.toUtf8());
-			} else {
-				processor_ = config->GetConfig()->getProcessor(output.toUtf8(),
-															   input.toUtf8());
-			}
-		} catch (OCIO::Exception &e) {
-			qWarning() << "ColorProcessor exception:" << e.what();
-		}
+		processor_handle_ = rt->processor_create_transform(
+			static_cast<OakColorConfigHandle>(config->GetConfigHandle()),
+			input.toUtf8().constData(),
+			output.toUtf8().constData(),
+			dir);
 	}
-
-	cpu_processor_ = processor_->getDefaultCPUProcessor();
 }
 
-ColorProcessor::ColorProcessor(OCIO::ConstProcessorRcPtr processor)
+ColorProcessor::ColorProcessor(void* oak_processor_handle)
 {
-	processor_ = processor;
-	cpu_processor_ = processor_->getDefaultCPUProcessor();
+	processor_handle_ = oak_processor_handle;
 }
 
 void ColorProcessor::ConvertFrame(Frame *f)
 {
-	OCIO::BitDepth ocio_bit_depth =
-		OCIOUtils::GetOCIOBitDepthFromPixelFormat(f->format());
-
-	if (ocio_bit_depth == OCIO::BIT_DEPTH_UNKNOWN) {
-		qCritical() << "Tried to color convert frame with no format";
+	auto rt = OakColorRuntime::Instance();
+	if (!rt->Load() || !processor_handle_) {
+		qCritical() << "Tried to color convert frame with no processor";
 		return;
 	}
 
-	OCIO::PackedImageDesc img(f->data(), f->width(), f->height(),
-							  f->channel_count(), ocio_bit_depth,
-							  OCIO::AutoStride, OCIO::AutoStride,
-							  f->linesize_bytes());
+	// Allocate output buffer
+	int w = f->width();
+	int h = f->height();
+	int channels = f->channel_count();
+	int pix_layout = channels;
 
-	cpu_processor_->apply(img);
+	if (f->format() == PixelFormat::F32) {
+		// In-place processing for float format
+		rt->processor_apply(static_cast<OakColorProcessorHandle>(processor_handle_), w, h,
+							reinterpret_cast<const float*>(f->data()),
+							reinterpret_cast<float*>(f->data()),
+							pix_layout);
+	} else {
+		// For other formats, convert to float first (simplified path)
+		std::vector<float> float_buf(w * h * channels);
+		// TODO: implement pixel format conversion to float RGBA
+		qCritical() << "Color conversion for non-float formats not yet implemented";
+	}
 }
 
 Color ColorProcessor::ConvertColor(const Color &in)
 {
-	// I've been bamboozled
-	float c[4] = { float(in.red()), float(in.green()), float(in.blue()),
-				   float(in.alpha()) };
+	auto rt = OakColorRuntime::Instance();
+	if (!rt->Load() || !processor_handle_) {
+		return in;
+	}
 
-	cpu_processor_->applyRGBA(c);
+	float c_in[4] = { float(in.red()), float(in.green()), float(in.blue()),
+					  float(in.alpha()) };
+	float c_out[4];
 
-	return Color(c[0], c[1], c[2], c[3]);
+	rt->processor_apply_pixel(static_cast<OakColorProcessorHandle>(processor_handle_), c_in, c_out);
+
+	return Color(c_out[0], c_out[1], c_out[2], c_out[3]);
 }
 
 ColorProcessorPtr ColorProcessor::Create(ColorManager *config,
@@ -129,18 +119,26 @@ ColorProcessorPtr ColorProcessor::Create(ColorManager *config,
 										 const ColorTransform &transform,
 										 Direction direction)
 {
-	return std::make_shared<ColorProcessor>(config, input, transform,
-											direction);
+	return std::make_shared<ColorProcessor>(config, input, transform, direction);
 }
 
-ColorProcessorPtr ColorProcessor::Create(OCIO::ConstProcessorRcPtr processor)
+ColorProcessorPtr ColorProcessor::Create(void* oak_processor_handle)
 {
-	return std::make_shared<ColorProcessor>(processor);
+	return std::make_shared<ColorProcessor>(oak_processor_handle);
 }
 
-OCIO::ConstProcessorRcPtr ColorProcessor::GetProcessor()
+void* ColorProcessor::GetProcessorHandle()
 {
-	return processor_;
+	return processor_handle_;
+}
+
+const char *ColorProcessor::id() const
+{
+	// Return a stable identifier based on the handle pointer
+	// (oakcolor.so does not expose cacheID via C API currently)
+	static char buf[32];
+	snprintf(buf, sizeof(buf), "%p", processor_handle_);
+	return buf;
 }
 
 void ColorProcessor::ConvertFrame(FramePtr f)

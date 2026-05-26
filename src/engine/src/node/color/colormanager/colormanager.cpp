@@ -28,13 +28,14 @@
 #include "olive/common/filefunctions.h"
 #include "config/config.h"
 #include "node/project.h"
+#include "runtime/oak_color_runtime.h"
 
 namespace olive
 {
 
 #define super Node
 
-OCIO::ConstConfigRcPtr ColorManager::default_config_ = nullptr;
+void* ColorManager::default_config_ = nullptr;
 
 ColorManager::ColorManager(Project *project)
 	: QObject(project)
@@ -44,21 +45,28 @@ ColorManager::ColorManager(Project *project)
 
 void ColorManager::Init()
 {
+	auto rt = OakColorRuntime::Instance();
+	if (!rt->Load()) return;
+
 	// Set config to our built-in default
-	config_ = GetDefaultConfig();
-	SetDefaultInputColorSpace(config_->getCanonicalName(OCIO::ROLE_DEFAULT));
-	project()->SetColorReferenceSpace(OCIO::ROLE_SCENE_LINEAR);
+	config_ = GetDefaultConfigHandle();
+	const char* default_cs = rt->config_default_input_space(static_cast<OakColorConfigHandle>(config_));
+	if (default_cs) {
+		SetDefaultInputColorSpace(QString::fromUtf8(default_cs));
+	}
+	project()->SetColorReferenceSpace(QStringLiteral("scene_linear"));
 }
 
-OCIO::ConstConfigRcPtr ColorManager::GetConfig() const
+void* ColorManager::GetConfigHandle() const
 {
 	return config_;
 }
 
-OCIO::ConstConfigRcPtr
-ColorManager::CreateConfigFromFile(const QString &filename)
+void* ColorManager::CreateConfigFromFile(const QString &filename)
 {
-	return OCIO::Config::CreateFromFile(filename.toUtf8());
+	auto rt = OakColorRuntime::Instance();
+	if (!rt->Load()) return nullptr;
+	return rt->config_load(filename.toUtf8().constData());
 }
 
 QString ColorManager::GetConfigFilename() const
@@ -66,24 +74,23 @@ QString ColorManager::GetConfigFilename() const
 	return project()->GetColorConfigFilename();
 }
 
-OCIO::ConstConfigRcPtr ColorManager::GetDefaultConfig()
+void* ColorManager::GetDefaultConfigHandle()
 {
 	return default_config_;
 }
 
 void ColorManager::SetUpDefaultConfig()
 {
+	auto rt = OakColorRuntime::Instance();
+	if (!rt->Load()) return;
+
 	if (!qEnvironmentVariableIsEmpty("OCIO")) {
 		// Attempt to set config from "OCIO" environment variable
-		try {
-			default_config_ = OCIO::Config::CreateFromEnv();
-
+		default_config_ = rt->config_load(nullptr);
+		if (default_config_) {
 			return;
-		} catch (OCIO::Exception &e) {
-			qWarning()
-				<< "Failed to load config from OCIO environment variable config:"
-				<< e.what();
 		}
+		qWarning() << "Failed to load config from OCIO environment variable";
 	}
 
 	// Extract OCIO config - kind of hacky, but it'll work
@@ -107,50 +114,56 @@ void ColorManager::SetConfigFilename(const QString &filename)
 QStringList ColorManager::ListAvailableDisplays()
 {
 	QStringList displays;
+	auto rt = OakColorRuntime::Instance();
+	if (!rt->Load() || !config_) return displays;
 
-	int number_of_displays = config_->getNumDisplays();
-
-	for (int i = 0; i < number_of_displays; i++) {
-		displays.append(config_->getDisplay(i));
+	// oakcolor.so C API does not expose display enumeration directly.
+	// For now, return empty list or query via default display.
+	// TODO: extend oakcolor.so C API with display enumeration if needed.
+	QString def = GetDefaultDisplay();
+	if (!def.isEmpty()) {
+		displays.append(def);
 	}
-
 	return displays;
 }
 
 QString ColorManager::GetDefaultDisplay()
 {
-	return config_->getDefaultDisplay();
+	auto rt = OakColorRuntime::Instance();
+	if (!rt->Load() || !config_) return QString();
+	const char* d = rt->config_default_display(static_cast<OakColorConfigHandle>(config_));
+	return d ? QString::fromUtf8(d) : QString();
 }
 
 QStringList ColorManager::ListAvailableViews(QString display)
 {
 	QStringList views;
+	auto rt = OakColorRuntime::Instance();
+	if (!rt->Load() || !config_) return views;
 
-	int number_of_views = config_->getNumViews(display.toUtf8());
-
-	for (int i = 0; i < number_of_views; i++) {
-		views.append(config_->getView(display.toUtf8(), i));
+	int n = rt->config_display_view_count(static_cast<OakColorConfigHandle>(config_), display.toUtf8().constData());
+	for (int i = 0; i < n; i++) {
+		const char* v = rt->config_display_view_name(static_cast<OakColorConfigHandle>(config_), display.toUtf8().constData(), i);
+		if (v) views.append(QString::fromUtf8(v));
 	}
-
 	return views;
 }
 
 QString ColorManager::GetDefaultView(const QString &display)
 {
-	return config_->getDefaultView(display.toUtf8());
+	auto rt = OakColorRuntime::Instance();
+	if (!rt->Load() || !config_) return QString();
+
+	// Return first view as default
+	const char* v = rt->config_display_view_name(static_cast<OakColorConfigHandle>(config_), display.toUtf8().constData(), 0);
+	return v ? QString::fromUtf8(v) : QString();
 }
 
 QStringList ColorManager::ListAvailableLooks()
 {
-	QStringList looks;
-
-	int number_of_looks = config_->getNumLooks();
-
-	for (int i = 0; i < number_of_looks; i++) {
-		looks.append(config_->getLookNameByIndex(i));
-	}
-
-	return looks;
+	// oakcolor.so C API does not expose looks enumeration.
+	// TODO: extend C API if needed.
+	return QStringList();
 }
 
 QStringList ColorManager::ListAvailableColorspaces() const
@@ -221,24 +234,27 @@ ColorManager::GetCompliantColorSpace(const ColorTransform &transform,
 }
 
 QStringList
-ColorManager::ListAvailableColorspaces(OCIO::ConstConfigRcPtr config)
+ColorManager::ListAvailableColorspaces(void* config_handle)
 {
 	QStringList spaces;
+	auto rt = OakColorRuntime::Instance();
+	if (!rt->Load() || !config_handle) return spaces;
 
-	if (config) {
-		int number_of_colorspaces = config->getNumColorSpaces();
-
-		for (int i = 0; i < number_of_colorspaces; i++) {
-			spaces.append(config->getColorSpaceNameByIndex(i));
-		}
+	int n = rt->config_space_count(static_cast<OakColorConfigHandle>(config_handle));
+	for (int i = 0; i < n; i++) {
+		const char* name = rt->config_space_name(static_cast<OakColorConfigHandle>(config_handle), i);
+		if (name) spaces.append(QString::fromUtf8(name));
 	}
-
 	return spaces;
 }
 
 void ColorManager::GetDefaultLumaCoefs(double *rgb) const
 {
-	config_->getDefaultLumaCoefs(rgb);
+	// oakcolor.so C API does not expose luma coefficients.
+	// Fallback to Rec.709 defaults.
+	rgb[0] = 0.2126;
+	rgb[1] = 0.7152;
+	rgb[2] = 0.0722;
 }
 
 Project *ColorManager::project() const
@@ -248,27 +264,30 @@ Project *ColorManager::project() const
 
 void ColorManager::UpdateConfigFromFilename()
 {
-	try {
-		QString config_filename = GetConfigFilename();
-		QString old_default_cs = GetDefaultInputColorSpace();
+	auto rt = OakColorRuntime::Instance();
+	if (!rt->Load()) return;
 
-		config_ = OCIO::Config::CreateFromFile(config_filename.toUtf8());
+	QString config_filename = GetConfigFilename();
+	QString old_default_cs = GetDefaultInputColorSpace();
 
-		// Set new default colorspace appropriately
-		QString new_default = old_default_cs;
-		QStringList available_cs = ListAvailableColorspaces();
-		for (int i = 0; i < available_cs.size(); i++) {
-			const QString &c = available_cs.at(i);
-			if (c.compare(old_default_cs, Qt::CaseInsensitive)) {
-				new_default = c;
-				break;
-			}
-		}
-		SetDefaultInputColorSpace(new_default);
-
-		emit ConfigChanged(config_filename);
-	} catch (OCIO::Exception &) {
+	if (config_) {
+		rt->config_free(static_cast<OakColorConfigHandle>(config_));
 	}
+	config_ = CreateConfigFromFile(config_filename);
+
+	// Set new default colorspace appropriately
+	QString new_default = old_default_cs;
+	QStringList available_cs = ListAvailableColorspaces();
+	for (int i = 0; i < available_cs.size(); i++) {
+		const QString &c = available_cs.at(i);
+		if (c.compare(old_default_cs, Qt::CaseInsensitive)) {
+			new_default = c;
+			break;
+		}
+	}
+	SetDefaultInputColorSpace(new_default);
+
+	emit ConfigChanged(config_filename);
 }
 
 }

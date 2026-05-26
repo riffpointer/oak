@@ -135,7 +135,7 @@ void ChromaKeyNode::GenerateProcessor()
 			ColorTransform transform("cie_xyz_d65_interchange");
 			set_processor(ColorProcessor::Create(
 				manager(), manager()->GetReferenceColorSpace(), transform));
-		} catch (const OCIO::Exception &e) {
+		} catch (const std::exception &e) {
 			std::cerr << std::endl << e.what() << std::endl;
 		}
 	}
