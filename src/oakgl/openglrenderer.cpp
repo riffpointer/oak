@@ -9,6 +9,7 @@
 
 #include <QDateTime>
 #include <QDebug>
+#include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -147,6 +148,12 @@ bool OpenGLRenderer::Init()
 {
     if (context_) {
         qCritical() << "Can't initialize already initialized OpenGLRenderer";
+        return false;
+    }
+
+    // Skip initialization in headless environments (no display/GPU)
+    if (!QGuiApplication::instance()) {
+        qWarning() << "No QGuiApplication instance; skipping OpenGL renderer init";
         return false;
     }
 

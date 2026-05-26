@@ -26,6 +26,8 @@ set(SHARED_SOURCES
   src/common/oiioutils.cpp
   src/common/icons.cpp
   src/common/xmlutils.cpp
+  # Headers with Q_OBJECT that need moc
+  include/olive/render/framemanager.h
 )
 
 add_library(oakshared STATIC ${SHARED_SOURCES})

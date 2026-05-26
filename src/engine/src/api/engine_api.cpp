@@ -7,6 +7,7 @@
 
 #include <QXmlStreamReader>
 #include <QVariant>
+#include <QGuiApplication>
 
 #include "node/project.h"
 #include "node/serializeddata.h"
@@ -73,6 +74,12 @@ OakEngineSessionHandle oak_engine_session_create(OakEngineProjectHandle proj,
                                                  int64_t timebase_num, int64_t timebase_den)
 {
 	if (!proj) return nullptr;
+
+	// Skip renderer initialization in headless environments (no display/GPU)
+	if (!QGuiApplication::instance()) {
+		return nullptr;
+	}
+
 	auto* project = reinterpret_cast<olive::Project*>(proj);
 
 	auto* session = new olive::EngineRenderSession();

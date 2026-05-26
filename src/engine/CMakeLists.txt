@@ -22,6 +22,7 @@ target_include_directories(oakengine PUBLIC
 
 target_link_libraries(oakengine PUBLIC
   oakshared
+  OfxHost
   Qt${QT_VERSION_MAJOR}::Core
   Qt${QT_VERSION_MAJOR}::Gui
   Qt${QT_VERSION_MAJOR}::Widgets
@@ -32,6 +33,7 @@ set_target_properties(oakengine PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
 )
 
-if(APPLE)
-  target_link_options(oakengine PUBLIC -undefined dynamic_lookup)
-endif()
+# All dependencies are linked explicitly; no dynamic_lookup needed.
+# if(APPLE)
+#   target_link_options(oakengine PUBLIC -undefined dynamic_lookup)
+# endif()

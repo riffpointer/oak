@@ -42,6 +42,10 @@ Decoder::Decoder()
 	UpdateLastAccessed();
 }
 
+Decoder::~Decoder()
+{
+}
+
 void Decoder::IncrementAccessTime(qint64 t)
 {
 	last_accessed_ += t;
