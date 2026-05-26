@@ -8,6 +8,7 @@
 #include <QXmlStreamReader>
 #include <QVariant>
 #include <QGuiApplication>
+#include <unordered_set>
 
 #include "node/project.h"
 #include "node/serializeddata.h"
@@ -82,6 +83,10 @@ OakEngineSessionHandle oak_engine_session_create(OakEngineProjectHandle proj,
 
 	auto* project = reinterpret_cast<olive::Project*>(proj);
 
+	if (width <= 0 || height <= 0) return nullptr;
+	if (timebase_den <= 0) return nullptr;
+	if (pixel_format < 0 || pixel_format >= olive::PixelFormat::COUNT) return nullptr;
+
 	auto* session = new olive::EngineRenderSession();
 	session->project = project;
 
@@ -103,9 +108,13 @@ OakEngineSessionHandle oak_engine_session_create(OakEngineProjectHandle proj,
 	return reinterpret_cast<OakEngineSessionHandle>(session);
 }
 
+static std::unordered_set<void*> g_destroyed_sessions;
+
 void oak_engine_session_destroy(OakEngineSessionHandle session)
 {
 	if (!session) return;
+	if (g_destroyed_sessions.count(session)) return;
+	g_destroyed_sessions.insert(session);
 	auto* s = reinterpret_cast<olive::EngineRenderSession*>(session);
 	if (s->renderer) {
 		s->renderer->PostDestroy();

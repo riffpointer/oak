@@ -6,6 +6,11 @@
 #include <cmath>
 #include <vector>
 
+static std::string TestOcioConfig() {
+    return std::string(TEST_SRC_DIR) + "/tests/assets/c_api/test_ocio_config.ocio";
+}
+
+
 class CAPColorTest : public ::testing::Test {};
 
 TEST_F(CAPColorTest, ConfigLoadDefault) {
@@ -24,14 +29,14 @@ TEST_F(CAPColorTest, ConfigFreeNull) {
 }
 
 TEST_F(CAPColorTest, ConfigDoubleFree) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     oak_color_config_free(cfg);
     // Double free may crash; do not test it explicitly
 }
 
 TEST_F(CAPColorTest, ConfigGetSpaceCount) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     int n = oak_color_config_space_count(cfg);
     EXPECT_GE(n, 0);
@@ -44,7 +49,7 @@ TEST_F(CAPColorTest, ConfigGetSpaceCountNull) {
 }
 
 TEST_F(CAPColorTest, ConfigGetSpaceName) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     const char* name = oak_color_config_space_name(cfg, 0);
     EXPECT_NE(name, nullptr);
@@ -52,7 +57,7 @@ TEST_F(CAPColorTest, ConfigGetSpaceName) {
 }
 
 TEST_F(CAPColorTest, ConfigGetSpace) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     OakColorSpaceHandle space = oak_color_config_get_space(cfg, "ACEScg");
     // May be null if ACEScg is not in default config
@@ -61,7 +66,7 @@ TEST_F(CAPColorTest, ConfigGetSpace) {
 }
 
 TEST_F(CAPColorTest, ConfigDisplayViewCount) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     const char* disp = oak_color_config_default_display(cfg);
     if (disp) {
@@ -72,7 +77,7 @@ TEST_F(CAPColorTest, ConfigDisplayViewCount) {
 }
 
 TEST_F(CAPColorTest, ConfigDisplayViewName) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     const char* disp = oak_color_config_default_display(cfg);
     if (disp) {
@@ -84,7 +89,7 @@ TEST_F(CAPColorTest, ConfigDisplayViewName) {
 }
 
 TEST_F(CAPColorTest, ColorSpaceEqual) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     OakColorSpaceHandle s1 = oak_color_config_get_space(cfg, "sRGB");
     OakColorSpaceHandle s2 = oak_color_config_get_space(cfg, "scene_linear");
@@ -96,7 +101,7 @@ TEST_F(CAPColorTest, ColorSpaceEqual) {
 }
 
 TEST_F(CAPColorTest, ProcessorCreateTransform) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     OakColorProcessorHandle proc = oak_color_processor_create(
         cfg, "sRGB", "scene_linear");
@@ -116,7 +121,7 @@ TEST_F(CAPColorTest, ProcessorCreateNullConfig) {
 }
 
 TEST_F(CAPColorTest, ProcessorCreateTransformForwardInverse) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     OakColorProcessorHandle fwd = oak_color_processor_create_transform(cfg, "sRGB", "scene_linear", 0);
     OakColorProcessorHandle inv = oak_color_processor_create_transform(cfg, "scene_linear", "sRGB", 1);
@@ -126,7 +131,7 @@ TEST_F(CAPColorTest, ProcessorCreateTransformForwardInverse) {
 }
 
 TEST_F(CAPColorTest, ProcessorCreateDisplay) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     OakColorProcessorHandle proc = oak_color_processor_create_display(
         cfg, "scene_linear", "sRGB", "Default", nullptr, 0);
@@ -145,7 +150,7 @@ TEST_F(CAPColorTest, ProcessorFreeNull) {
 }
 
 TEST_F(CAPColorTest, ProcessorApplyPixel) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     OakColorProcessorHandle proc = oak_color_processor_create(
         cfg, "sRGB", "scene_linear");
@@ -162,7 +167,7 @@ TEST_F(CAPColorTest, ProcessorApplyPixel) {
 }
 
 TEST_F(CAPColorTest, ProcessorApplyBuffer) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     OakColorProcessorHandle proc = oak_color_processor_create(
         cfg, "sRGB", "scene_linear");
@@ -179,7 +184,7 @@ TEST_F(CAPColorTest, ProcessorApplyBuffer) {
 }
 
 TEST_F(CAPColorTest, ProcessorApplyInPlace) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     OakColorProcessorHandle proc = oak_color_processor_create(
         cfg, "sRGB", "scene_linear");
@@ -195,7 +200,7 @@ TEST_F(CAPColorTest, ProcessorApplyInPlace) {
 }
 
 TEST_F(CAPColorTest, DisplayTransformCreate) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     OakDisplayTransformHandle dt = oak_display_transform_create(
         cfg, "scene_linear", "sRGB", "Default", nullptr, 0.0f, 1.0f);
@@ -219,7 +224,7 @@ TEST_F(CAPColorTest, DisplayTransformFreeNull) {
 }
 
 TEST_F(CAPColorTest, DisplayTransformApply) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     OakDisplayTransformHandle dt = oak_display_transform_create(
         cfg, "scene_linear", "sRGB", "Default", nullptr, 0.0f, 1.0f);
@@ -236,7 +241,7 @@ TEST_F(CAPColorTest, DisplayTransformApply) {
 }
 
 TEST_F(CAPColorTest, DisplayTransformApplyExposure) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     OakDisplayTransformHandle dt1 = oak_display_transform_create(
         cfg, "scene_linear", "sRGB", "Default", nullptr, 0.0f, 1.0f);
@@ -270,7 +275,7 @@ TEST_F(CAPColorTest, DisplayTransformApplyExposure) {
 }
 
 TEST_F(CAPColorTest, GpuShaderCreate) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     OakColorProcessorHandle proc = oak_color_processor_create(cfg, "sRGB", "scene_linear");
     if (!proc) {
@@ -285,7 +290,7 @@ TEST_F(CAPColorTest, GpuShaderCreate) {
 }
 
 TEST_F(CAPColorTest, GpuShaderGetText) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     OakColorProcessorHandle proc = oak_color_processor_create(cfg, "sRGB", "scene_linear");
     if (!proc) {
@@ -311,7 +316,7 @@ TEST_F(CAPColorTest, GpuShaderFreeNull) {
 }
 
 TEST_F(CAPColorTest, GpuShader3dLutCount) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     OakColorProcessorHandle proc = oak_color_processor_create(cfg, "sRGB", "scene_linear");
     if (!proc) {
@@ -332,7 +337,7 @@ TEST_F(CAPColorTest, GpuShader3dLutCount) {
 }
 
 TEST_F(CAPColorTest, GpuShaderGet3dLutInvalid) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     OakColorProcessorHandle proc = oak_color_processor_create(cfg, "sRGB", "scene_linear");
     if (!proc) {
@@ -358,7 +363,7 @@ TEST_F(CAPColorTest, GpuShaderGet3dLutInvalid) {
 }
 
 TEST_F(CAPColorTest, GpuShaderTextureCount) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     OakColorProcessorHandle proc = oak_color_processor_create(cfg, "sRGB", "scene_linear");
     if (!proc) {
@@ -467,7 +472,7 @@ TEST_F(CAPColorTest, GradingPrimaryNoClampValues) {
 }
 
 TEST_F(CAPColorTest, ProcessorCreateFromGrading) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     OakColorGradingPrimaryHandle gp = oak_color_grading_primary_create(0);
     ASSERT_NE(gp, nullptr);
@@ -479,7 +484,7 @@ TEST_F(CAPColorTest, ProcessorCreateFromGrading) {
 }
 
 TEST_F(CAPColorTest, ConfigDefaultDisplay) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     const char* disp = oak_color_config_default_display(cfg);
     EXPECT_NE(disp, nullptr);
@@ -487,7 +492,7 @@ TEST_F(CAPColorTest, ConfigDefaultDisplay) {
 }
 
 TEST_F(CAPColorTest, ConfigDefaultInputSpace) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     const char* space = oak_color_config_default_input_space(cfg);
     EXPECT_NE(space, nullptr);
@@ -495,7 +500,7 @@ TEST_F(CAPColorTest, ConfigDefaultInputSpace) {
 }
 
 TEST_F(CAPColorTest, ConfigReferenceSpaceName) {
-    OakColorConfigHandle cfg = oak_color_config_load(nullptr);
+    OakColorConfigHandle cfg = oak_color_config_load(TestOcioConfig().c_str());
     ASSERT_NE(cfg, nullptr);
     const char* ref = oak_color_config_reference_space_name(cfg);
     EXPECT_NE(ref, nullptr);

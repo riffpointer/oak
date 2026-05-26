@@ -225,12 +225,22 @@ OakDisplayTransformHandle oak_display_transform_create(OakColorConfigHandle conf
     if (!config || !config->config || !input_space || !display_name || !view_name)
         return nullptr;
     try {
+        auto group = OCIO_NAMESPACE::GroupTransform::Create();
+
         auto dt = OCIO_NAMESPACE::DisplayViewTransform::Create();
         dt->setSrc(input_space);
         dt->setDisplay(display_name);
         dt->setView(view_name);
+        group->appendTransform(dt);
 
-        auto processor = config->config->getProcessor(dt);
+        if (exposure_fstop != 0.0f || display_gamma != 1.0f) {
+            auto ec = OCIO_NAMESPACE::ExposureContrastTransform::Create();
+            ec->setExposure(exposure_fstop);
+            ec->setGamma(display_gamma);
+            group->appendTransform(ec);
+        }
+
+        auto processor = config->config->getProcessor(group);
         if (!processor) return nullptr;
 
         auto* t = new OakDisplayTransform();

@@ -202,6 +202,12 @@ void OpenGLRenderer::Destroy()
         }
         target_map_.clear();
 
+        // Unbind context before destroying surface to avoid macOS Metal backend issues
+        if (context_->parent() == this && surface_.isValid()) {
+            context_->makeCurrent(&surface_);
+            context_->doneCurrent();
+        }
+
         if (context_->parent() == this) {
             delete context_;
         }

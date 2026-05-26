@@ -8,7 +8,7 @@ add_executable(olive-gtest
   c_api_audio_test.cpp
   c_api_pluginhost_test.cpp
   c_api_edge_test.cpp
-  ${CMAKE_SOURCE_DIR}/src/oakpluginhost/pluginhost_api.cpp
+  oakshared_test.cpp
 )
 
 target_include_directories(
@@ -18,6 +18,8 @@ target_include_directories(
   ${CMAKE_SOURCE_DIR}/tests
 )
 
+target_compile_definitions(olive-gtest PRIVATE TEST_SRC_DIR="${CMAKE_SOURCE_DIR}")
+
 target_link_libraries(
   olive-gtest
   PRIVATE
@@ -26,7 +28,10 @@ target_link_libraries(
   oakcolor
   oakgl
   oakaudio
+  oakpluginhost
   oakshared
+  Qt${QT_VERSION_MAJOR}::Core
+  Qt${QT_VERSION_MAJOR}::Gui
   GTest::gtest
 )
 

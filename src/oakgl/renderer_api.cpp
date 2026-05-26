@@ -13,6 +13,10 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <unordered_map>
+
+static std::unordered_map<GLuint, std::pair<int,int>> g_texture_sizes;
+static std::unordered_map<GLuint, std::pair<int,int>> g_target_sizes;
 
 #if defined(__APPLE__)
 #include <dlfcn.h>
@@ -151,6 +155,7 @@ OakTextureHandle oak_texture_upload(OakRendererHandle renderer,
 
     OakTextureHandle handle = reinterpret_cast<OakTextureHandle>(
         static_cast<uintptr_t>(tex));
+    g_texture_sizes[tex] = {width, height};
     return handle;
 }
 
@@ -180,15 +185,21 @@ void oak_texture_destroy(OakRendererHandle renderer, OakTextureHandle texture)
     auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
     if (!r || !texture) return;
     GLuint tex = static_cast<GLuint>(reinterpret_cast<uintptr_t>(texture));
+    g_texture_sizes.erase(tex);
     r->DestroyTexture(tex);
 }
 
 void oak_texture_size(OakTextureHandle texture, int *out_width, int *out_height)
 {
-    (void)texture;
-    // TODO: store metadata with handle
-    if (out_width)  *out_width  = 0;
-    if (out_height) *out_height = 0;
+    GLuint tex = texture ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(texture)) : 0;
+    auto it = g_texture_sizes.find(tex);
+    if (it != g_texture_sizes.end()) {
+        if (out_width)  *out_width  = it->second.first;
+        if (out_height) *out_height = it->second.second;
+    } else {
+        if (out_width)  *out_width  = 0;
+        if (out_height) *out_height = 0;
+    }
 }
 
 static int GetChannelsFromPixelFormat(OakRenderPixelFormat fmt)
@@ -248,7 +259,9 @@ OakTargetHandle oak_target_create(OakRendererHandle renderer,
     GLuint fbo = r->CreateTarget(width, height, pix_fmt, has_depth);
     if (fbo == 0) return nullptr;
 
-    return reinterpret_cast<OakTargetHandle>(static_cast<uintptr_t>(fbo));
+    OakTargetHandle handle = reinterpret_cast<OakTargetHandle>(static_cast<uintptr_t>(fbo));
+    g_target_sizes[fbo] = {width, height};
+    return handle;
 }
 
 void oak_target_destroy(OakRendererHandle renderer, OakTargetHandle target)
@@ -256,6 +269,7 @@ void oak_target_destroy(OakRendererHandle renderer, OakTargetHandle target)
     auto *r = reinterpret_cast<oakgl::OpenGLRenderer*>(renderer);
     if (!r || !target) return;
     GLuint fbo = static_cast<GLuint>(reinterpret_cast<uintptr_t>(target));
+    g_target_sizes.erase(fbo);
     r->DestroyTarget(fbo);
 }
 
@@ -266,14 +280,20 @@ void oak_target_resize(OakRendererHandle renderer, OakTargetHandle target,
     if (!r || !target) return;
     GLuint fbo = static_cast<GLuint>(reinterpret_cast<uintptr_t>(target));
     r->ResizeTarget(fbo, width, height);
+    g_target_sizes[fbo] = {width, height};
 }
 
 void oak_target_size(OakTargetHandle target, int *out_width, int *out_height)
 {
-    (void)target;
-    // Target size requires renderer context. For now, caller should track size.
-    if (out_width)  *out_width  = 0;
-    if (out_height) *out_height = 0;
+    GLuint fbo = target ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(target)) : 0;
+    auto it = g_target_sizes.find(fbo);
+    if (it != g_target_sizes.end()) {
+        if (out_width)  *out_width  = it->second.first;
+        if (out_height) *out_height = it->second.second;
+    } else {
+        if (out_width)  *out_width  = 0;
+        if (out_height) *out_height = 0;
+    }
 }
 
 OakTextureHandle oak_target_color_texture(OakRendererHandle renderer,
@@ -456,14 +476,28 @@ int oak_renderer_readback(OakRendererHandle renderer, OakTargetHandle target,
     if (!r) return -1;
 
     GLuint fbo = target ? static_cast<GLuint>(reinterpret_cast<uintptr_t>(target)) : 0;
+    auto it = g_target_sizes.find(fbo);
+    if (it == g_target_sizes.end()) {
+        if (out_data) *out_data = nullptr;
+        if (out_stride) *out_stride = 0;
+        return -1;
+    }
 
-    // Need target dimensions - for now assume caller knows, or we can query
-    // TODO: store target metadata to get width/height from handle
-    // Using 0x0 will fail, so we return error until metadata is stored
-    (void)out_pix_fmt;
-    if (out_data) *out_data = nullptr;
-    if (out_stride) *out_stride = 0;
-    return -1; /* TODO: need width/height from target handle metadata */
+    int width = it->second.first;
+    int height = it->second.second;
+
+    void *data = nullptr;
+    int stride = 0;
+    bool ok = r->Readback(fbo, width, height, out_pix_fmt, &data, &stride);
+    if (!ok) {
+        if (out_data) *out_data = nullptr;
+        if (out_stride) *out_stride = 0;
+        return -1;
+    }
+
+    if (out_data) *out_data = data;
+    if (out_stride) *out_stride = stride;
+    return 0;
 }
 
 void oak_renderer_free_readback(void *data)

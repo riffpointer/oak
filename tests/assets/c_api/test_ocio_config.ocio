@@ -1,0 +1,53 @@
+ocio_profile_version: 2
+
+environment:
+  {}
+search_path: ""
+strictparsing: true
+luma: [0.2126, 0.7152, 0.0722]
+name: oak-test
+description: Minimal OCIO config for Oak C API tests
+
+roles:
+  {}
+
+file_rules:
+  - !<Rule> {name: Default, colorspace: scene_linear}
+
+displays:
+  sRGB:
+    - !<View> {name: Default, colorspace: sRGB}
+
+active_displays: [sRGB]
+active_views: [Default]
+
+colorspaces:
+  - !<ColorSpace>
+    name: scene_linear
+    family: linear
+    equalitygroup: ""
+    bitdepth: unknown
+    description: Linear working space
+    isdata: false
+    allocation: uniform
+    to_scene_reference: !<MatrixTransform> {}
+
+  - !<ColorSpace>
+    name: sRGB
+    family: display
+    equalitygroup: ""
+    bitdepth: unknown
+    description: sRGB display space
+    isdata: false
+    allocation: uniform
+    to_scene_reference: !<ExponentTransform> {value: 2.2}
+
+  - !<ColorSpace>
+    name: ACEScg
+    family: linear
+    equalitygroup: ""
+    bitdepth: unknown
+    description: ACEScg working space
+    isdata: false
+    allocation: uniform
+    to_scene_reference: !<MatrixTransform> {}
