@@ -184,7 +184,7 @@ ConformManager::GetConformedFilename(const QString &cache_path,
                      QString::number(stream.stream()),
                      QString::number(params.sample_rate()),
                      QString::number(params.format()),
-                     QString::number(params.channel_layout().u.mask),
+                     QString::number(params.channel_layout_mask()),
                      QString::number(i));
 
         filenames[i] = QDir(cache_path).filePath(index_fn);

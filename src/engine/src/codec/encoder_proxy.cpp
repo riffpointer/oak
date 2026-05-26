@@ -64,7 +64,7 @@ void EncoderProxy::SetVideoParams(const VideoParams &params)
     auto rt = OakCodecRuntime::Instance();
     if (!handle_) return;
     rt->encoder_set_video_params(handle_, params.effective_width(), params.effective_height(),
-                                 OAK_RENDER_PIX_FMT_RGBA8, // TODO: map
+                                 OAK_FRAME_PIX_RGBA8, // TODO: map
                                  params.time_base().numerator(),
                                  params.time_base().denominator(),
                                  params.frame_rate().toDouble());

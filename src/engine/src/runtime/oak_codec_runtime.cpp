@@ -1,6 +1,7 @@
 /***  Oak Video Editor - Codec Runtime Loader  Copyright (C) 2025 mikesolar  ***/
 
 #include "oak_codec_runtime.h"
+#include <QDebug>
 
 namespace olive {
 
@@ -39,6 +40,7 @@ bool OakCodecRuntime::Load()
     decoder_supports_video = GetSymbol<decltype(decoder_supports_video)>("oak_decoder_supports_video");
     decoder_supports_audio = GetSymbol<decltype(decoder_supports_audio)>("oak_decoder_supports_audio");
     decoder_is_open = GetSymbol<decltype(decoder_is_open)>("oak_decoder_is_open");
+    decoder_set_progress_callback = GetSymbol<decltype(decoder_set_progress_callback)>("oak_decoder_set_progress_callback");
 
     decoder_probe_file = GetSymbol<decltype(decoder_probe_file)>("oak_decoder_probe_file");
     decoder_open_stream = GetSymbol<decltype(decoder_open_stream)>("oak_decoder_open_stream");
@@ -67,6 +69,16 @@ bool OakCodecRuntime::Load()
     encoder_write_video = GetSymbol<decltype(encoder_write_video)>("oak_encoder_write_video");
     encoder_write_audio = GetSymbol<decltype(encoder_write_audio)>("oak_encoder_write_audio");
     encoder_finalize = GetSymbol<decltype(encoder_finalize)>("oak_encoder_finalize");
+
+    frame_alloc = GetSymbol<decltype(frame_alloc)>("oak_frame_alloc");
+    frame_free = GetSymbol<decltype(frame_free)>("oak_frame_free");
+    frame_get_plane = GetSymbol<decltype(frame_get_plane)>("oak_frame_get_plane");
+    frame_get_params = GetSymbol<decltype(frame_get_params)>("oak_frame_get_params");
+    frame_convert = GetSymbol<decltype(frame_convert)>("oak_frame_convert");
+    video_format_to_av = GetSymbol<decltype(video_format_to_av)>("oak_video_format_to_av");
+    av_to_video_format = GetSymbol<decltype(av_to_video_format)>("oak_av_to_video_format");
+    video_format_is_planar = GetSymbol<decltype(video_format_is_planar)>("oak_video_format_is_planar");
+    video_format_compatible = GetSymbol<decltype(video_format_compatible)>("oak_video_format_compatible");
 
     if (!decoder_open || !decoder_close || !encoder_create || !encoder_close) {
         qWarning() << "Failed to resolve essential codec symbols from oakcodec.so";

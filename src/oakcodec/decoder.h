@@ -25,7 +25,7 @@ extern "C" {
 #include "loopmode.h"
 #include "rendermode.h"
 #include "olive/common/cancelatom.h"
-#include "olive/common/ffmpegutils.h"
+#include "ffmpeg_utils.h"
 
 namespace olive
 {

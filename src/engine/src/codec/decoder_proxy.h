@@ -12,7 +12,8 @@
 #include "codec/codec_stream.h"
 #include "codec/footage_description.h"
 #include "olive/common/cancelatom.h"
-#include "olive/common/ffmpegutils.h"
+#include "oak/codec_api.h"
+#include "codec/avframe_types.h"
 #include "olive/render/videoparams.h"
 #include "olive/core/render/audioparams.h"
 #include "olive/core/util/rational.h"
@@ -84,7 +85,7 @@ public:
                                          CancelAtom *cancelled);
 
 private:
-    void* handle_;  // OakDecoderHandle
+    OakDecoderHandle handle_;
     qint64 last_accessed_;
     std::function<void(double)> progress_cb_;
     CodecStream stream_;

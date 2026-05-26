@@ -794,7 +794,7 @@ void ExportDialog::SetParams(const EncodingParams &e)
 		audio_tab_->sample_rate_combobox()->SetSampleRate(
 			e.audio_params().sample_rate());
 		audio_tab_->channel_layout_combobox()->SetChannelLayout(
-			e.audio_params().channel_layout());
+			e.audio_params().channel_layout_mask());
 		audio_tab_->sample_format_combobox()->SetSampleFormat(
 			e.audio_params().format());
 

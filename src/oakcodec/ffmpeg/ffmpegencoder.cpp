@@ -30,7 +30,8 @@ extern "C" {
 
 #include <QFile>
 
-#include "olive/common/ffmpegutils.h"
+#include "ffmpeg_utils.h"
+#include "audio_params_helpers.h"
 
 namespace olive
 {
@@ -773,7 +774,12 @@ bool FFmpegEncoder::InitializeStream(AVMediaType type, AVStream **stream_ptr,
 	} else if (type == AVMEDIA_TYPE_AUDIO) {
 		// Assume audio stream
 		codec_ctx->sample_rate = params().audio_params().sample_rate();
-		codec_ctx->ch_layout = params().audio_params().channel_layout();
+		{
+			AVChannelLayout layout;
+			oakcodec::AudioParamsToAVChannelLayout(params().audio_params(), &layout);
+			av_channel_layout_copy(&codec_ctx->ch_layout, &layout);
+			av_channel_layout_uninit(&layout);
+		}
 		codec_ctx->sample_fmt = FFmpegUtils::GetFFmpegSampleFormat(
 			params().audio_params().format());
 		codec_ctx->time_base = { 1, codec_ctx->sample_rate };
@@ -914,13 +920,15 @@ bool FFmpegEncoder::InitializeResampleContext(const AudioParams &audio)
 	if (audio_resample_ctx_) {
 		return true;
 	}
-	AVChannelLayout layout = audio.channel_layout();
+	AVChannelLayout layout;
+	oakcodec::AudioParamsToAVChannelLayout(audio, &layout);
 	// Create resample context
 	swr_alloc_set_opts2(&audio_resample_ctx_, &audio_codec_ctx_->ch_layout,
 						audio_codec_ctx_->sample_fmt,
 						audio_codec_ctx_->sample_rate, &layout,
 						FFmpegUtils::GetFFmpegSampleFormat(audio.format()),
 						audio.sample_rate(), 0, nullptr);
+	av_channel_layout_uninit(&layout);
 	if (!audio_resample_ctx_) {
 		return false;
 	}

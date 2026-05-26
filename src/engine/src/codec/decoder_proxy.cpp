@@ -66,7 +66,7 @@ AVFramePtr DecoderProxy::RetrieveVideo(const RetrieveVideoParams &p)
     params.time_num = p.time.numerator();
     params.time_den = p.time.denominator();
     params.divider = p.divider;
-    params.maximum_format = static_cast<int>(OAK_FRAME_PIX_FMT_RGBA8); // TODO: map
+    params.maximum_format = static_cast<int>(OAK_FRAME_PIX_RGBA8); // TODO: map
     params.force_range = 0;
     params.renderer_hint = p.renderer;
     params.cancelled = p.cancelled;
@@ -149,13 +149,13 @@ void DecoderProxy::SetProgressCallback(std::function<void(double)> cb)
     if (!handle_) return;
 
     if (cb) {
-        rt->oak_decoder_set_progress_callback(handle_,
+        rt->decoder_set_progress_callback(handle_,
             [](double p, void* ud) {
                 auto* self = static_cast<DecoderProxy*>(ud);
                 if (self && self->progress_cb_) self->progress_cb_(p);
             }, this);
     } else {
-        rt->oak_decoder_set_progress_callback(handle_, nullptr, nullptr);
+        rt->decoder_set_progress_callback(handle_, nullptr, nullptr);
     }
 }
 
@@ -227,18 +227,17 @@ FootageDescription DecoderProxy::ProbeMedia(const QString &filename,
     if (!proxy) return FootageDescription();
 
     auto rt = OakCodecRuntime::Instance();
-    OakMediaInfo info;
-    memset(&info, 0, sizeof(info));
-    if (rt->decoder_probe_file(proxy->handle_, filename.toUtf8().constData(), &info) != 0) {
+    OakMediaInfo* info_ptr = rt->decoder_probe_file(proxy->handle_, filename.toUtf8().constData());
+    if (!info_ptr) {
         return FootageDescription();
     }
 
     FootageDescription desc(decoder_id);
-    desc.SetStreamCount(info.video_stream_count + info.audio_stream_count
-                        + info.subtitle_stream_count);
+    desc.SetStreamCount(info_ptr->video_stream_count + info_ptr->audio_stream_count
+                        + info_ptr->subtitle_stream_count);
 
-    for (int i = 0; i < info.video_stream_count; i++) {
-        const OakVideoStreamInfo& vi = info.video_streams[i];
+    for (int i = 0; i < info_ptr->video_stream_count; i++) {
+        const OakVideoStreamInfo& vi = info_ptr->video_streams[i];
         VideoParams vp(vi.width, vi.height,
                        rational(vi.timebase_num, vi.timebase_den),
                        PixelFormat::U8, 4); // TODO: map pix_fmt properly
@@ -246,11 +245,11 @@ FootageDescription DecoderProxy::ProbeMedia(const QString &filename,
         desc.AddVideoStream(vp);
     }
 
-    for (int i = 0; i < info.audio_stream_count; i++) {
-        const OakAudioStreamInfo& ai = info.audio_streams[i];
+    for (int i = 0; i < info_ptr->audio_stream_count; i++) {
+        const OakAudioStreamInfo& ai = info_ptr->audio_streams[i];
         AudioParams ap(ai.sample_rate, ai.channels,
                        SampleFormat::F32P);
-        ap.set_stream_index(i + info.video_stream_count);
+        ap.set_stream_index(i + info_ptr->video_stream_count);
         desc.AddAudioStream(ap);
     }
 

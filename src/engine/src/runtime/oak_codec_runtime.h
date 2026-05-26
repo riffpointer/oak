@@ -25,6 +25,8 @@ public:
     int (*decoder_supports_video)(OakDecoderHandle decoder) = nullptr;
     int (*decoder_supports_audio)(OakDecoderHandle decoder) = nullptr;
     int (*decoder_is_open)(OakDecoderHandle decoder) = nullptr;
+    void (*decoder_set_progress_callback)(OakDecoderHandle decoder,
+                                          void (*cb)(double, void*), void* userdata) = nullptr;
 
     OakMediaInfo* (*decoder_probe_file)(OakDecoderHandle decoder, const char* filepath) = nullptr;
     int (*decoder_open_stream)(OakDecoderHandle decoder, const char* filepath, int stream_index) = nullptr;
@@ -86,6 +88,17 @@ public:
                                const float* data, int64_t samples,
                                int64_t pts_num, int64_t pts_den) = nullptr;
     int (*encoder_finalize)(OakEncoderHandle encoder) = nullptr;
+
+    /* --- frame utilities (for PluginRenderer) --- */
+    void* (*frame_alloc)(int width, int height, int av_format) = nullptr;
+    void (*frame_free)(void* frame) = nullptr;
+    int (*frame_get_plane)(void* frame, int plane, void** out_data, int* out_linesize) = nullptr;
+    int (*frame_get_params)(void* frame, int* out_width, int* out_height, int* out_av_format) = nullptr;
+    int (*frame_convert)(void* src_frame, void* dst_frame) = nullptr;
+    int (*video_format_to_av)(int pixel_format, int channel_count) = nullptr;
+    int (*av_to_video_format)(int av_format, int* out_pixel_format, int* out_channel_count) = nullptr;
+    int (*video_format_is_planar)(int av_format) = nullptr;
+    int (*video_format_compatible)(int pixel_format) = nullptr;
 
 private:
     OakCodecRuntime() = default;

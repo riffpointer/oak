@@ -82,13 +82,13 @@ bool AudioProcessor::Open(const AudioParams &from, const AudioParams &to,
 	from_p.sample_rate = from.sample_rate();
 	from_p.channels = from.channel_count();
 	from_p.sample_fmt = OAK_AUDIO_FMT_FLT;
-	from_p.channel_layout_mask = from.channel_layout().u.mask;
+	from_p.channel_layout_mask = from.channel_layout_mask();
 
 	OakAudioParams to_p;
 	to_p.sample_rate = to.sample_rate();
 	to_p.channels = to.channel_count();
 	to_p.sample_fmt = OAK_AUDIO_FMT_FLT;
-	to_p.channel_layout_mask = to.channel_layout().u.mask;
+	to_p.channel_layout_mask = to.channel_layout_mask();
 
 	handle_ = rt->filter_graph_create(&from_p, &to_p, tempo);
 	if (!handle_) {

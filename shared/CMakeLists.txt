@@ -19,7 +19,6 @@ set(SHARED_SOURCES
   src/render/videoparams.cpp
   src/common/commandlineparser.cpp
   src/common/debug.cpp
-  src/common/ffmpegutils.cpp
   src/common/filefunctions.cpp
   src/common/html.cpp
   src/common/jobtime.cpp
@@ -34,7 +33,6 @@ add_library(oakshared STATIC ${SHARED_SOURCES})
 target_include_directories(oakshared PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_SOURCE_DIR}/third_party/openfx/include
-  ${FFMPEG_INCLUDE_DIRS}
   ${OIIO_INCLUDE_DIRS}
   ${OPENEXR_INCLUDES}
   ${OCIO_INCLUDE_DIRS}
@@ -50,7 +48,6 @@ target_link_libraries(oakshared PUBLIC
   Qt${QT_VERSION_MAJOR}::Gui
   # Qt${QT_VERSION_MAJOR}::Widgets  REMOVED: only qtutils.cpp needs it, moved to app/
 
-  ${FFMPEG_LIBRARIES}
   ${OIIO_LIBRARIES}
   ${OPENEXR_LIBRARIES}
   ${OCIO_LIBRARIES}

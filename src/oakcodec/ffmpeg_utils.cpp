@@ -19,7 +19,7 @@
 
 ***/
 
-#include "olive/common/ffmpegutils.h"
+#include "ffmpeg_utils.h"
 
 namespace olive
 {

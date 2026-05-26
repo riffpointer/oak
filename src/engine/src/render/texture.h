@@ -22,7 +22,7 @@
 #ifndef RENDERTEXTURE_H
 #define RENDERTEXTURE_H
 
-#include "olive/common/ffmpegutils.h"
+#include "codec/avframe_types.h"
 
 #include <atomic>
 #include <memory>
@@ -162,7 +162,7 @@ public:
 	}
 	void handleFrame(AVFramePtr ptr)
 	{
-		frame_=ptr;
+		frame_ = ptr;
 	}
 	AVFramePtr frame(){
 		return frame_;

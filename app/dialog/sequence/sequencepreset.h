@@ -39,7 +39,7 @@ public:
 	SequencePreset(const QString &name, int width, int height,
 				   const rational &frame_rate, const rational &pixel_aspect,
 				   VideoParams::Interlacing interlacing, int sample_rate,
-				   AVChannelLayout &channel_layout, int preview_divider,
+				   uint64_t channel_layout, int preview_divider,
 				   PixelFormat preview_format, bool preview_autocache)
 		: width_(width)
 		, height_(height)
@@ -76,7 +76,7 @@ public:
 			} else if (reader->name() == QStringLiteral("samplerate")) {
 				sample_rate_ = reader->readElementText().toInt();
 			} else if (reader->name() == QStringLiteral("chlayout")) {
-				channel_layout_.u.mask =
+				channel_layout_ =
 					reader->readElementText().toULongLong();
 			} else if (reader->name() == QStringLiteral("divider")) {
 				preview_divider_ = reader->readElementText().toInt();
@@ -109,7 +109,7 @@ public:
 		writer->writeTextElement(QStringLiteral("samplerate"),
 								 QString::number(sample_rate_));
 		writer->writeTextElement(QStringLiteral("chlayout"),
-								 QString::number(channel_layout_.u.mask));
+								 QString::number(channel_layout_));
 		writer->writeTextElement(QStringLiteral("divider"),
 								 QString::number(preview_divider_));
 		writer->writeTextElement(QStringLiteral("format"),
@@ -148,7 +148,7 @@ public:
 		return sample_rate_;
 	}
 
-	AVChannelLayout channel_layout() const
+	uint64_t channel_layout() const
 	{
 		return channel_layout_;
 	}
@@ -175,7 +175,7 @@ private:
 	rational pixel_aspect_;
 	VideoParams::Interlacing interlacing_;
 	int sample_rate_;
-	AVChannelLayout channel_layout_;
+	uint64_t channel_layout_;
 	int preview_divider_;
 	PixelFormat preview_format_;
 	bool preview_autocache_;

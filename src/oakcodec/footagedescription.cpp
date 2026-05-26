@@ -49,7 +49,7 @@ static void SaveAudioParams(QXmlStreamWriter *writer, const AudioParams &a)
     writer->writeTextElement(QStringLiteral("samplerate"),
                              QString::number(a.sample_rate()));
     writer->writeTextElement(QStringLiteral("channellayout"),
-                             QString::number(a.channel_layout().u.mask));
+                             QString::number(a.channel_layout_mask()));
     writer->writeTextElement(QStringLiteral("format"),
                              QString::fromStdString(a.format().to_string()));
     writer->writeTextElement(QStringLiteral("enabled"),

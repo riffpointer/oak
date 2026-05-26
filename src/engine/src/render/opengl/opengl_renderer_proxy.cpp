@@ -4,7 +4,7 @@
 #include "runtime/oak_renderer_runtime.h"
 #include "render/job/shaderjob.h"
 #include "node/value.h"
-#include "texture.h"
+#include "render/texture.h"
 
 #include <QVector>
 #include <QMatrix4x4>

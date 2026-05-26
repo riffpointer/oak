@@ -27,9 +27,10 @@
 #include "oiio/oiiodecoder.h"
 #include "ffmpeg/ffmpegencoder.h"
 #include "oiio/oiioencoder.h"
-#include "olive/common/ffmpegutils.h"
+#include "ffmpeg_utils.h"
 extern "C" {
 #include <libswscale/swscale.h>
+#include <libavutil/pixdesc.h>
 }
 
 /* ================================================================ */
@@ -1411,3 +1412,150 @@ int oak_decoder_conform_audio(OakDecoderHandle decoder,
 
     return wrapper->decoder->ConformAudio(output_filenames, ap, nullptr) ? 0 : -1;
 }
+
+
+/* ================================================================ */
+/*  Frame utilities (for PluginRenderer)                                */
+/* ================================================================ */
+
+extern "C" {
+
+void* oak_frame_alloc(int width, int height, int av_format)
+{
+    AVFrame* f = av_frame_alloc();
+    if (!f) return nullptr;
+    f->format = av_format;
+    f->width = width;
+    f->height = height;
+    if (av_frame_get_buffer(f, 0) < 0) {
+        av_frame_free(&f);
+        return nullptr;
+    }
+    return f;
+}
+
+void oak_frame_free(void* frame)
+{
+    if (frame) {
+        AVFrame* f = static_cast<AVFrame*>(frame);
+        av_frame_free(&f);
+    }
+}
+
+int oak_frame_get_plane(void* frame, int plane, void** out_data, int* out_linesize)
+{
+    if (!frame) return -1;
+    AVFrame* f = static_cast<AVFrame*>(frame);
+    if (plane < 0 || plane >= AV_NUM_DATA_POINTERS) return -1;
+    if (out_data) *out_data = f->data[plane];
+    if (out_linesize) *out_linesize = f->linesize[plane];
+    return 0;
+}
+
+int oak_frame_get_params(void* frame, int* out_width, int* out_height, int* out_av_format)
+{
+    if (!frame) return -1;
+    AVFrame* f = static_cast<AVFrame*>(frame);
+    if (out_width) *out_width = f->width;
+    if (out_height) *out_height = f->height;
+    if (out_av_format) *out_av_format = f->format;
+    return 0;
+}
+
+int oak_frame_convert(void* src_frame, void* dst_frame)
+{
+    if (!src_frame || !dst_frame) return -1;
+    AVFrame* src = static_cast<AVFrame*>(src_frame);
+    AVFrame* dst = static_cast<AVFrame*>(dst_frame);
+
+    SwsContext* sws_ctx = sws_getContext(
+        src->width, src->height, static_cast<AVPixelFormat>(src->format),
+        dst->width, dst->height, static_cast<AVPixelFormat>(dst->format),
+        SWS_POINT, nullptr, nullptr, nullptr);
+    if (!sws_ctx) return -1;
+
+    int ret = sws_scale(sws_ctx, src->data, src->linesize, 0, src->height,
+                        dst->data, dst->linesize);
+    sws_freeContext(sws_ctx);
+    return (ret > 0) ? 0 : -1;
+}
+
+int oak_video_format_to_av(int pixel_format, int channel_count)
+{
+    return static_cast<int>(olive::FFmpegUtils::GetFFmpegPixelFormat(
+        static_cast<olive::core::PixelFormat::Format>(pixel_format), channel_count));
+}
+
+int oak_av_to_video_format(int av_format, int* out_pixel_format, int* out_channel_count)
+{
+    switch (av_format) {
+    case AV_PIX_FMT_GRAY8:
+        if (out_pixel_format) *out_pixel_format = static_cast<int>(olive::core::PixelFormat::U8);
+        if (out_channel_count) *out_channel_count = 1;
+        return 0;
+    case AV_PIX_FMT_RGB24:
+        if (out_pixel_format) *out_pixel_format = static_cast<int>(olive::core::PixelFormat::U8);
+        if (out_channel_count) *out_channel_count = 3;
+        return 0;
+    case AV_PIX_FMT_RGBA:
+        if (out_pixel_format) *out_pixel_format = static_cast<int>(olive::core::PixelFormat::U8);
+        if (out_channel_count) *out_channel_count = 4;
+        return 0;
+    case AV_PIX_FMT_RGB48:
+        if (out_pixel_format) *out_pixel_format = static_cast<int>(olive::core::PixelFormat::U16);
+        if (out_channel_count) *out_channel_count = 3;
+        return 0;
+    case AV_PIX_FMT_RGBA64:
+        if (out_pixel_format) *out_pixel_format = static_cast<int>(olive::core::PixelFormat::U16);
+        if (out_channel_count) *out_channel_count = 4;
+        return 0;
+    case AV_PIX_FMT_RGBF16:
+        if (out_pixel_format) *out_pixel_format = static_cast<int>(olive::core::PixelFormat::F16);
+        if (out_channel_count) *out_channel_count = 3;
+        return 0;
+    case AV_PIX_FMT_RGBAF16:
+        if (out_pixel_format) *out_pixel_format = static_cast<int>(olive::core::PixelFormat::F16);
+        if (out_channel_count) *out_channel_count = 4;
+        return 0;
+    case AV_PIX_FMT_RGBF32:
+        if (out_pixel_format) *out_pixel_format = static_cast<int>(olive::core::PixelFormat::F32);
+        if (out_channel_count) *out_channel_count = 3;
+        return 0;
+    case AV_PIX_FMT_RGBAF32:
+        if (out_pixel_format) *out_pixel_format = static_cast<int>(olive::core::PixelFormat::F32);
+        if (out_channel_count) *out_channel_count = 4;
+        return 0;
+    case AV_PIX_FMT_GRAY16LE:
+        if (out_pixel_format) *out_pixel_format = static_cast<int>(olive::core::PixelFormat::U16);
+        if (out_channel_count) *out_channel_count = 1;
+        return 0;
+    case AV_PIX_FMT_GRAYF16:
+        if (out_pixel_format) *out_pixel_format = static_cast<int>(olive::core::PixelFormat::F16);
+        if (out_channel_count) *out_channel_count = 1;
+        return 0;
+    case AV_PIX_FMT_GRAYF32:
+        if (out_pixel_format) *out_pixel_format = static_cast<int>(olive::core::PixelFormat::F32);
+        if (out_channel_count) *out_channel_count = 1;
+        return 0;
+    default:
+        if (out_pixel_format) *out_pixel_format = static_cast<int>(olive::core::PixelFormat::INVALID);
+        if (out_channel_count) *out_channel_count = 0;
+        return -1;
+    }
+}
+
+int oak_video_format_is_planar(int av_format)
+{
+    const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(static_cast<AVPixelFormat>(av_format));
+    if (!desc) return -1;
+    return (desc->flags & AV_PIX_FMT_FLAG_PLANAR) ? 1 : 0;
+}
+
+int oak_video_format_compatible(int pixel_format)
+{
+    olive::core::PixelFormat fmt(static_cast<olive::core::PixelFormat::Format>(pixel_format));
+    olive::core::PixelFormat result = olive::FFmpegUtils::GetCompatiblePixelFormat(fmt);
+    return static_cast<int>(static_cast<olive::core::PixelFormat::Format>(result));
+}
+
+} // extern "C"

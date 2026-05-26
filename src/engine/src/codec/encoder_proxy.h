@@ -8,6 +8,7 @@
 #include "codec/encoder.h"
 #include "olive/render/videoparams.h"
 #include "olive/core/render/audioparams.h"
+#include "oak/codec_api.h"
 #include "oak/frame_api.h"
 
 namespace olive {
@@ -36,7 +37,7 @@ public:
     bool Finalize();
 
 private:
-    void* handle_; // OakEncoderHandle
+    OakEncoderHandle handle_; // OakEncoderHandle
     EncodingParams params_;
 };
 

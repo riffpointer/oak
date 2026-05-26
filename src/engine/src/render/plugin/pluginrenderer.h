@@ -33,7 +33,6 @@
 
 #include "render/renderer.h"
 #include "render/job/pluginjob.h"
-#include "render/opengl/openglrenderer.h"
 namespace olive
 {
 namespace plugin{
@@ -44,10 +43,10 @@ int BytesToPixels(int byte_linesize, const olive::VideoParams &params);
 }
 // 作用：OFX 插件渲染器，负责 CPU/GL 路径下的插件调用和纹理桥接。
 // Purpose: OFX plugin renderer that drives CPU/GL render paths and texture bridging.
-class PluginRenderer : public olive::OpenGLRenderer{
+class PluginRenderer : public QObject{
 	Q_OBJECT
 public:
-	PluginRenderer(QObject *parent=nullptr):OpenGLRenderer(parent){};
+	PluginRenderer(QObject *parent=nullptr):QObject(parent){};
 	virtual ~PluginRenderer() override{};
 	// 作用：将目标纹理绑定为插件输出。
 	// Purpose: Attach destination texture as OFX output.

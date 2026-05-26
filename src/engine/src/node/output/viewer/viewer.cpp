@@ -235,12 +235,10 @@ void ViewerOutput::set_default_parameters()
 		OLIVE_CONFIG("DefaultSequenceInterlacing")
 			.value<VideoParams::Interlacing>(),
 		VideoParams::generate_auto_divider(width, height)));
-	AVChannelLayout layout;
-	av_channel_layout_from_mask(
-		&layout, OLIVE_CONFIG("DefaultSequenceAudioLayout").toULongLong());
 	SetAudioParams(
 		AudioParams(OLIVE_CONFIG("DefaultSequenceAudioFrequency").toInt(),
-					layout, kDefaultSampleFormat));
+					OLIVE_CONFIG("DefaultSequenceAudioLayout").toULongLong(),
+					kDefaultSampleFormat));
 }
 
 void ViewerOutput::InvalidateCache(const TimeRange &range, const QString &from,
@@ -595,7 +593,7 @@ void ViewerOutput::set_parameters_from_footage(
 
 		if (!audio_streams.isEmpty()) {
 			const AudioParams &s = audio_streams.first();
-			SetAudioParams(AudioParams(s.sample_rate(), s.channel_layout(),
+			SetAudioParams(AudioParams(s.sample_rate(), s.channel_layout_mask(),
 									   kDefaultSampleFormat));
 		}
 	}

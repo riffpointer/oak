@@ -1,9 +1,8 @@
 # oakrenderer 进程通信协议
 
-> `oakrenderer` 是一个**独立可执行文件**，不链接 Qt，不链接 `oakengine.so`。
-> 它只链接：
-> - `oakcore.so`（通过 C API 加载节点图）
-> - `oaknodes.so`（通过 C API 注册节点类型）
+> `oakrenderer` 是一个**独立可执行文件**，链接 Qt，不链接 `oakengine.so`。
+> 它只通过dlopen/dlsys加载：
+> - `oakengine.so`（通过 C API 调用主编辑器能力）
 > - `oakcodec.so`（通过 C API 解码素材）
 > - `oakcolor.so`（通过 C API 色彩管理）
 > - `oakgl.so`（通过 C API 渲染后端）

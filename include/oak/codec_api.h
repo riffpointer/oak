@@ -212,6 +212,71 @@ int  oak_encoder_write_audio(OakEncoderHandle encoder,
                              int64_t pts_num, int64_t pts_den);
 int  oak_encoder_finalize(OakEncoderHandle encoder);
 
+/* ------------------------------------------------------------------ */
+/*  帧工具（CPU 缓冲区分配与像素格式转换）—— PluginRenderer 使用            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * @brief 分配一个带缓冲区的 CPU 帧（内部使用 AVFrame）。
+ * @param width      帧宽度
+ * @param height     帧高度
+ * @param av_format  FFmpeg AVPixelFormat 的整数值
+ * @return 内部 AVFrame 指针（不透明），失败返回 nullptr。
+ */
+void* oak_frame_alloc(int width, int height, int av_format);
+
+/**
+ * @brief 释放由 oak_frame_alloc 分配的帧。
+ */
+void oak_frame_free(void* frame);
+
+/**
+ * @brief 获取帧的平面数据指针和行跨度。
+ * @param frame    oak_frame_alloc 返回的指针
+ * @param plane    平面索引（packed 格式用 0）
+ * @param out_data   输出数据指针
+ * @param out_linesize 输出行跨度（字节）
+ * @return 0 成功，-1 失败
+ */
+int oak_frame_get_plane(void* frame, int plane, void** out_data, int* out_linesize);
+
+/**
+ * @brief 获取帧的格式参数。
+ */
+int oak_frame_get_params(void* frame, int* out_width, int* out_height, int* out_av_format);
+
+/**
+ * @brief 使用 FFmpeg sws_scale 进行帧格式转换。
+ * @param src_frame  源帧（oak_frame_alloc 返回）
+ * @param dst_frame  目标帧（已预分配）
+ * @return 0 成功，-1 失败
+ */
+int oak_frame_convert(void* src_frame, void* dst_frame);
+
+/**
+ * @brief 将 Olive PixelFormat + channel_count 映射为 FFmpeg AVPixelFormat。
+ * @return AVPixelFormat 整数值，失败返回 -1。
+ */
+int oak_video_format_to_av(int pixel_format, int channel_count);
+
+/**
+ * @brief 将 FFmpeg AVPixelFormat 映射回 Olive PixelFormat + channel_count。
+ * @return 0 成功，-1 失败。
+ */
+int oak_av_to_video_format(int av_format, int* out_pixel_format, int* out_channel_count);
+
+/**
+ * @brief 查询 AVPixelFormat 是否为 planar 格式。
+ * @return 1 planar，0 packed，-1 未知。
+ */
+int oak_video_format_is_planar(int av_format);
+
+/**
+ * @brief 获取给定 PixelFormat 的兼容格式（降级到可用格式）。
+ * @return 兼容的 PixelFormat 整数值。
+ */
+int oak_video_format_compatible(int pixel_format);
+
 #ifdef __cplusplus
 }
 #endif

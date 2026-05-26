@@ -36,7 +36,8 @@ extern "C" {
 #include <QThread>
 
 #include "planarfiledevice.h"
-#include "olive/common/ffmpegutils.h"
+#include "ffmpeg_utils.h"
+#include "audio_params_helpers.h"
 #include "olive/common/filefunctions.h"
 #include "olive/render/subtitleparams.h"
 
@@ -448,7 +449,7 @@ FootageDescription FFmpegDecoder::Probe(const QString &filename,
 
 					AudioParams stream;
 					stream.set_stream_index(i);
-					stream.set_channel_layout(channel_layout);
+					stream.set_channel_layout(channel_layout.u.mask);
 					stream.set_sample_rate(avstream->codecpar->sample_rate);
 					stream.set_format(FFmpegUtils::GetNativeSampleFormat(
 						static_cast<AVSampleFormat>(
@@ -538,7 +539,8 @@ bool FFmpegDecoder::ConformAudioInternal(const QVector<QString> &filenames,
 		return false;
 	}
 	// Create resampling context
-	AVChannelLayout layout = params.channel_layout();
+	AVChannelLayout layout;
+	oakcodec::AudioParamsToAVChannelLayout(params, &layout);
 	SwrContext *resampler=NULL;
 	swr_alloc_set_opts2(
 		&resampler, &layout,
