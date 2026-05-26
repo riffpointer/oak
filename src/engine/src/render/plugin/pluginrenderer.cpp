@@ -24,7 +24,6 @@
 #include "ofxhPropertySuite.h"
 #include "olive/core/render/pixelformat.h"
 #include "render/texture.h"
-#include "render/opengl/openglrenderer.h"
 #include "node/value.h"
 #include "olive/render/videoparams.h"
 #include <array>
@@ -45,22 +44,29 @@
 #include "undo/undostack.h"
 #include "pluginSupport/OliveClip.h"
 #include "pluginSupport/OlivePluginInstance.h"
-#include "olive/common/ffmpegutils.h"
+#include "codec/avframe_types.h"
 #include "ofxhParam.h"
 #include "ofxImageEffect.h"
 #include "ofxhUtilities.h"
 #include "ofxGPURender.h"
 #include "olive/core/util/color.h"
-extern "C"{
-#include <libavutil/pixfmt.h>
-#include <libavutil/pixdesc.h>
-#include <libswscale/swscale.h>
-}
+#include "runtime/oak_codec_runtime.h"
 
+// Helper: allocate an AVFrame through OakCodecRuntime instead of direct FFmpeg API.
+static olive::AVFramePtr AllocFrameViaRuntime(int width, int height, int av_format)
+{
+    auto rt = olive::OakCodecRuntime::Instance();
+    void* raw = rt->frame_alloc(width, height, av_format);
+    if (!raw) return nullptr;
+    AVFrame* f = static_cast<AVFrame*>(raw);
+    return std::shared_ptr<AVFrame>(f, [](AVFrame* ptr) {
+        olive::OakCodecRuntime::Instance()->frame_free(ptr);
+    });
+}
 
 // 作用：从 OFX Image 属性推导 FFmpeg 像素格式，并返回每像素字节数。
 // Purpose: Infer FFmpeg pixel format from OFX image properties and return bytes-per-pixel.
-static AVPixelFormat GetOfxAVPixelFormat(const OFX::Host::ImageEffect::Image &image,
+static int GetOfxAVPixelFormat(const OFX::Host::ImageEffect::Image &image,
 										 int *bytes_per_pixel)
 {
 	const std::string &depth = image.getStringProperty(kOfxImageEffectPropPixelDepth);
@@ -86,7 +92,7 @@ static AVPixelFormat GetOfxAVPixelFormat(const OFX::Host::ImageEffect::Image &im
 		channel_count = 1;
 	}
 
-	AVPixelFormat pix_fmt = olive::FFmpegUtils::GetFFmpegPixelFormat(pixel_format, channel_count);
+	int pix_fmt = olive::OakCodecRuntime::Instance()->video_format_to_av(pixel_format, channel_count);
 	if (pix_fmt == AV_PIX_FMT_NONE && channel_count == 1) {
 		if (pixel_format == olive::core::PixelFormat::U8) {
 			pix_fmt = AV_PIX_FMT_GRAY8;
@@ -103,17 +109,12 @@ static AVPixelFormat GetOfxAVPixelFormat(const OFX::Host::ImageEffect::Image &im
 		return AV_PIX_FMT_NONE;
 	}
 
-	const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pix_fmt);
-	if (!desc) {
+	int bpc = pixel_format.byte_count();
+	if (bpc <= 0) {
 		return AV_PIX_FMT_NONE;
 	}
 
-	int bits_per_pixel = av_get_bits_per_pixel(desc);
-	if (bits_per_pixel <= 0 || bits_per_pixel % 8 != 0) {
-		return AV_PIX_FMT_NONE;
-	}
-
-	*bytes_per_pixel = bits_per_pixel / 8;
+	*bytes_per_pixel = channel_count * bpc;
 	return pix_fmt;
 }
 
@@ -286,7 +287,7 @@ static void ApplyParamOverrides(OFX::Host::ImageEffect::Instance &instance,
 	}
 }
 
-static AVPixelFormat GetDestinationAVPixelFormat(const olive::VideoParams &params);
+static int GetDestinationAVPixelFormat(const olive::VideoParams &params);
 
 // 作用：读取 clip 偏好（像素深度与分量）并更新 VideoParams。
 // Purpose: Apply clip preferences (depth/components) into VideoParams.
@@ -690,7 +691,7 @@ static olive::AVFramePtr create_avframe_from_ofx_image(OFX::Host::ImageEffect::I
 	}
 
 	int bytes_per_pixel = 0;
-	AVPixelFormat pix_fmt = GetOfxAVPixelFormat(image, &bytes_per_pixel);
+	int pix_fmt = GetOfxAVPixelFormat(image, &bytes_per_pixel);
 	if (pix_fmt == AV_PIX_FMT_NONE || bytes_per_pixel <= 0) {
 		qWarning().noquote()
 			<< "OFX output image has unsupported pixel format depth="
@@ -710,12 +711,8 @@ static olive::AVFramePtr create_avframe_from_ofx_image(OFX::Host::ImageEffect::I
 	uint8_t *src = static_cast<uint8_t *>(data_ptr);
 	src += bounds[1] * row_bytes + bounds[0] * bytes_per_pixel;
 
-	olive::AVFramePtr frame = olive::CreateAVFramePtr();
-	frame->width = width;
-	frame->height = height;
-	frame->format = pix_fmt;
-
-	if (av_frame_get_buffer(frame.get(), 0) < 0) {
+	olive::AVFramePtr frame = AllocFrameViaRuntime(width, height, pix_fmt);
+	if (!frame) {
 		return nullptr;
 	}
 
@@ -807,12 +804,8 @@ static olive::AVFramePtr create_avframe_from_ofx_image_with_params(
 
 
 		if (src_fmt != AV_PIX_FMT_NONE) {
-			olive::AVFramePtr src_frame = olive::CreateAVFramePtr();
-			src_frame->width = width;
-			src_frame->height = height;
-			src_frame->format = src_fmt;
-			if (av_frame_get_buffer(src_frame.get(), 0) >= 0) {
-
+			olive::AVFramePtr src_frame = AllocFrameViaRuntime(width, height, src_fmt);
+			if (src_frame) {
 				// Copy source data row by row (or as a single block if strides match)
 				const int copy_bytes = width * src_bytes_per_pixel;
 				if (src_frame->linesize[0] == row_bytes && row_bytes == copy_bytes) {
@@ -826,7 +819,7 @@ static olive::AVFramePtr create_avframe_from_ofx_image_with_params(
 				// Convert to destination format
 				return ConvertFrameIfNeeded(src_frame, params, renderer);
 			} else {
-				qWarning().noquote() << "[WARN] av_frame_get_buffer failed for src_fmt=" << src_fmt;
+				qWarning().noquote() << "[WARN] frame_alloc failed for src_fmt=" << src_fmt;
 			}
 		} else {
 			qWarning().noquote()
@@ -835,17 +828,13 @@ static olive::AVFramePtr create_avframe_from_ofx_image_with_params(
 	}
 
 	// Same format - direct copy
-	AVPixelFormat pix_fmt = GetDestinationAVPixelFormat(params);
+	int pix_fmt = GetDestinationAVPixelFormat(params);
 	if (pix_fmt == AV_PIX_FMT_NONE) {
 		return nullptr;
 	}
 
-	olive::AVFramePtr frame = olive::CreateAVFramePtr();
-	frame->width = width;
-	frame->height = height;
-	frame->format = pix_fmt;
-
-	if (av_frame_get_buffer(frame.get(), 0) < 0) {
+	olive::AVFramePtr frame = AllocFrameViaRuntime(width, height, pix_fmt);
+	if (!frame) {
 		return nullptr;
 	}
 
@@ -860,10 +849,10 @@ static olive::AVFramePtr create_avframe_from_ofx_image_with_params(
 
 // 作用：将 VideoParams 映射为最终输出的 AVPixelFormat。
 // Purpose: Map VideoParams to the final AVPixelFormat.
-static AVPixelFormat GetDestinationAVPixelFormat(const olive::VideoParams &params)
+static int GetDestinationAVPixelFormat(const olive::VideoParams &params)
 {
-	AVPixelFormat pix_fmt =
-		olive::FFmpegUtils::GetFFmpegPixelFormat(params.format(),
+	int pix_fmt =
+		olive::OakCodecRuntime::Instance()->video_format_to_av(params.format(),
 												 params.channel_count());
 	if (pix_fmt == AV_PIX_FMT_NONE && params.channel_count() == 1) {
 		if (params.format() == olive::core::PixelFormat::U8) {
@@ -902,29 +891,22 @@ static olive::AVFramePtr ReadbackTextureToFrame(olive::TexturePtr texture,
 		return nullptr;
 	}
 
-	AVPixelFormat pix_fmt = GetDestinationAVPixelFormat(params);
+	int pix_fmt = GetDestinationAVPixelFormat(params);
 	if (pix_fmt == AV_PIX_FMT_NONE) {
 		return nullptr;
 	}
 
-	const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pix_fmt);
-	if (!desc) {
-		return nullptr;
-	}
-
-	if (!(desc->flags & AV_PIX_FMT_FLAG_PLANAR)) {
-		olive::AVFramePtr frame = olive::CreateAVFramePtr();
-		frame->format = pix_fmt;
-		frame->width = params.width();
-		frame->height = params.height();
-		if (av_frame_get_buffer(frame.get(), 0) < 0) {
+	auto rt = olive::OakCodecRuntime::Instance();
+	if (!rt->video_format_is_planar(pix_fmt)) {
+		olive::AVFramePtr frame = AllocFrameViaRuntime(params.width(), params.height(), pix_fmt);
+		if (!frame) {
 			return nullptr;
 		}
 
 		if (texture->renderer()) {
 			const int linesize_pixels =
 				olive::plugin::detail::BytesToPixels(frame->linesize[0],
-													 params);
+																	 params);
 			texture->renderer()->DownloadFromTexture(
 				texture->id(), params, frame->data[0], linesize_pixels);
 		}
@@ -936,44 +918,29 @@ static olive::AVFramePtr ReadbackTextureToFrame(olive::TexturePtr texture,
 		params.width(), params.height(), olive::core::PixelFormat::U8, 4,
 		params.pixel_aspect_ratio(), params.interlacing(), params.divider());
 
-	olive::AVFramePtr rgba_frame = olive::CreateAVFramePtr();
-	rgba_frame->format = AV_PIX_FMT_RGBA;
-	rgba_frame->width = params.width();
-	rgba_frame->height = params.height();
-	if (av_frame_get_buffer(rgba_frame.get(), 0) < 0) {
+	olive::AVFramePtr rgba_frame = AllocFrameViaRuntime(params.width(), params.height(), AV_PIX_FMT_RGBA);
+	if (!rgba_frame) {
 		return nullptr;
 	}
 
 	if (texture->renderer()) {
 		const int linesize_pixels =
 			olive::plugin::detail::BytesToPixels(rgba_frame->linesize[0],
-												 rgba_params);
+																	 rgba_params);
 		texture->renderer()->DownloadFromTexture(
 			texture->id(), rgba_params, rgba_frame->data[0], linesize_pixels);
 	}
 
-	olive::AVFramePtr dst = olive::CreateAVFramePtr();
-	dst->format = pix_fmt;
-	dst->width = params.width();
-	dst->height = params.height();
-	if (av_frame_get_buffer(dst.get(), 0) < 0) {
+	olive::AVFramePtr dst = AllocFrameViaRuntime(params.width(), params.height(), pix_fmt);
+	if (!dst) {
 		return rgba_frame;
 	}
 
-	SwsContext *sws_ctx = sws_getContext(
-		rgba_frame->width, rgba_frame->height,
-		static_cast<AVPixelFormat>(rgba_frame->format),
-		dst->width, dst->height, pix_fmt, SWS_POINT,
-		nullptr, nullptr, nullptr);
-	if (!sws_ctx) {
-		return rgba_frame;
+	if (rt->frame_convert(rgba_frame.get(), dst.get()) == 0) {
+		return dst;
 	}
 
-	sws_scale(sws_ctx, rgba_frame->data, rgba_frame->linesize, 0,
-			  rgba_frame->height, dst->data, dst->linesize);
-	sws_freeContext(sws_ctx);
-
-	return dst;
+	return rgba_frame;
 }
 
 // 作用：将字节行跨度转换为像素行跨度。
@@ -1024,7 +991,7 @@ static void GetOliveFormatFromAV(AVPixelFormat fmt, olive::core::PixelFormat *ou
 }
 
 // 作用：必要时将 AVFrame 转换为目标 VideoParams 对应格式。
-//       优先使用 FFmpeg sws_scale；若不支持且 renderer 可用，则走 GPU 路径。
+//       优先使用 OakCodecRuntime frame_convert；若不支持且 renderer 可用，则走 GPU 路径。
 //       删除所有手写 CPU 像素循环，避免精度损失与性能瓶颈。
 static olive::AVFramePtr ConvertFrameIfNeeded(olive::AVFramePtr src,
 											  const olive::VideoParams &dst_params,
@@ -1034,7 +1001,7 @@ static olive::AVFramePtr ConvertFrameIfNeeded(olive::AVFramePtr src,
 		return nullptr;
 	}
 
-	AVPixelFormat dst_fmt = GetDestinationAVPixelFormat(dst_params);
+	int dst_fmt = GetDestinationAVPixelFormat(dst_params);
 	if (dst_fmt == AV_PIX_FMT_NONE) {
 		return src;
 	}
@@ -1046,30 +1013,19 @@ static olive::AVFramePtr ConvertFrameIfNeeded(olive::AVFramePtr src,
 		return src;
 	}
 
-	olive::AVFramePtr dst = olive::CreateAVFramePtr();
-	dst->format = dst_fmt;
-	dst->width = dst_params.width();
-	dst->height = dst_params.height();
-	if (av_frame_get_buffer(dst.get(), 0) < 0) {
-		qWarning().noquote() << "[WARN] av_frame_get_buffer failed for dst_fmt=" << dst_fmt;
+	olive::AVFramePtr dst = AllocFrameViaRuntime(dst_params.width(), dst_params.height(), dst_fmt);
+	if (!dst) {
+		qWarning().noquote() << "[WARN] frame_alloc failed for dst_fmt=" << dst_fmt;
 		return src;
 	}
 
-	// Try FFmpeg sws_scale first
-	SwsContext *sws_ctx = sws_getContext(
-		src->width, src->height, static_cast<AVPixelFormat>(src->format),
-		dst->width, dst->height, dst_fmt, SWS_POINT,
-		nullptr, nullptr, nullptr);
-	if (sws_ctx) {
-		int ret = sws_scale(sws_ctx, src->data, src->linesize, 0, src->height,
-							dst->data, dst->linesize);
-		sws_freeContext(sws_ctx);
-		if (ret > 0) {
-			return dst;
-		}
+	// Try OakCodecRuntime frame_convert first
+	auto rt = olive::OakCodecRuntime::Instance();
+	if (rt->frame_convert(src.get(), dst.get()) == 0) {
+		return dst;
 	}
 
-	// sws_scale failed (e.g. RGBAF32 not supported). Use GPU if renderer available.
+	// frame_convert failed (e.g. RGBAF32 not supported). Use GPU if renderer available.
 	if (renderer && src->data[0]) {
 		olive::core::PixelFormat src_fmt;
 		int src_ch;
@@ -1077,10 +1033,11 @@ static olive::AVFramePtr ConvertFrameIfNeeded(olive::AVFramePtr src,
 		if (src_fmt != olive::core::PixelFormat::INVALID && src_ch > 0) {
 			// Ensure renderer's OpenGL context is current before GPU operations.
 			// The context may have been switched by upstream DownloadFromTexture calls.
-			auto *gl_renderer = dynamic_cast<olive::OpenGLRenderer *>(renderer);
-			if (gl_renderer) {
-				gl_renderer->EnsureContextCurrent(__FUNCTION__);
-			}
+			// FIXME: OpenGLRenderer removed from engine; context management needs re-implementation.
+			// auto *gl_renderer = dynamic_cast<olive::OpenGLRenderer *>(renderer);
+			// if (gl_renderer) {
+			// 	gl_renderer->EnsureContextCurrent(__FUNCTION__);
+			// }
 
 			olive::VideoParams src_vp(src->width, src->height, src_fmt, src_ch);
 			int src_bpp = olive::VideoParams::GetBytesPerPixel(src_fmt, src_ch);
@@ -1109,7 +1066,7 @@ static olive::AVFramePtr ConvertFrameIfNeeded(olive::AVFramePtr src,
 	}
 
 	qWarning().noquote()
-		<< "[WARN] ConvertFrameIfNeeded failed (sws_scale + GPU both unavailable). "
+		<< "[WARN] ConvertFrameIfNeeded failed (frame_convert + GPU both unavailable). "
 		<< "Returning unconverted source. src_fmt=" << src->format
 		<< " dst_fmt=" << dst_fmt;
 	return src;
@@ -1159,7 +1116,7 @@ static olive::TexturePtr ConvertTextureForParams(olive::TexturePtr src,
 		}
 	}
 
-	// CPU fallback: readback, sws_scale, re-upload
+	// CPU fallback: readback, frame_convert, re-upload
 	olive::AVFramePtr frame = src->frame();
 	if (!frame || !frame->data[0]) {
 		frame = ReadbackTextureToFrame(src, src_params);
@@ -1790,8 +1747,8 @@ void olive::plugin::PluginRenderer::RenderPlugin(TexturePtr src, olive::plugin::
 							  renderScale, true, interactive);
 			return;
 		}
-		AVFramePtr converted = ConvertFrameIfNeeded(frame_ptr, destination_params, this);
-		const AVPixelFormat expected_fmt =
+		AVFramePtr converted = ConvertFrameIfNeeded(frame_ptr, destination_params, nullptr);
+		const int expected_fmt =
 			GetDestinationAVPixelFormat(destination_params);
 		destination->handleFrame(converted);
 		if (destination->renderer() && converted && converted->data[0] &&
@@ -1832,12 +1789,12 @@ void olive::plugin::PluginRenderer::AttachOutputTexture(olive::TexturePtr textur
 	if (!texture) {
 		return;
 	}
-	AttachTextureAsDestination(texture->id());
+	// AttachTextureAsDestination(texture->id()); // FIXME: OpenGLRenderer method removed
 }
 
 // 作用：解除 OFX 的 GL 输出绑定。
 // Purpose: Detach OFX GL output binding.
 void olive::plugin::PluginRenderer::DetachOutputTexture()
 {
-	DetachTextureAsDestination();
+	// DetachTextureAsDestination(); // FIXME: OpenGLRenderer method removed
 }

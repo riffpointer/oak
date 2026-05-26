@@ -24,7 +24,7 @@
 #include "OliveClip.h"
 
 #include "common/Current.h"
-#include "olive/common/ffmpegutils.h"
+#include "codec/avframe_types.h"
 #include "ofxCore.h"
 #include "ofxhClip.h"
 #include "pluginSupport/image.h"
@@ -35,12 +35,22 @@
 #ifdef OFX_SUPPORTS_OPENGLRENDER
 #include <QOpenGLFunctions>
 #endif
-#include "olive/common/ffmpegutils.h"
+#include "codec/avframe_types.h"
+#include "runtime/oak_codec_runtime.h"
 #include "render/renderer.h"
-extern "C" {
-#include <libswscale/swscale.h>
-#include <libavutil/pixdesc.h>
+
+// Helper: allocate an AVFrame through OakCodecRuntime instead of direct FFmpeg API.
+static olive::AVFramePtr AllocFrameViaRuntime(int width, int height, int av_format)
+{
+    auto rt = olive::OakCodecRuntime::Instance();
+    void* raw = rt->frame_alloc(width, height, av_format);
+    if (!raw) return nullptr;
+    AVFrame* f = static_cast<AVFrame*>(raw);
+    return std::shared_ptr<AVFrame>(f, [](AVFrame* ptr) {
+        olive::OakCodecRuntime::Instance()->frame_free(ptr);
+    });
 }
+
 namespace {
 const std::string kBitDepthNoneStr(kOfxBitDepthNone);
 const std::string kBitDepthByteStr(kOfxBitDepthByte);
@@ -84,7 +94,7 @@ static int PackedFloatChannels(AVPixelFormat fmt)
 	}
 }
 
-static bool PackedDstInfo(AVPixelFormat fmt, int *channels,
+static bool PackedDstInfo(int fmt, int *channels,
 						  int *bytes_per_component)
 {
 	switch (fmt) {
@@ -124,30 +134,23 @@ static olive::AVFramePtr ReadbackTextureToFrame(olive::TexturePtr texture,
 		return nullptr;
 	}
 
-	AVPixelFormat pix_fmt =
-		olive::FFmpegUtils::GetFFmpegPixelFormat(params.format(),
+	int pix_fmt =
+		olive::OakCodecRuntime::Instance()->video_format_to_av(params.format(),
 										  params.channel_count());
 	if (pix_fmt == AV_PIX_FMT_NONE) {
 		return nullptr;
 	}
 
-	const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pix_fmt);
-	if (!desc) {
-		return nullptr;
-	}
-
-	if (!(desc->flags & AV_PIX_FMT_FLAG_PLANAR)) {
-		olive::AVFramePtr frame = olive::CreateAVFramePtr();
-		frame->format = pix_fmt;
-		frame->width = params.width();
-		frame->height = params.height();
-		if (av_frame_get_buffer(frame.get(), 0) < 0) {
+	auto rt = olive::OakCodecRuntime::Instance();
+	if (!rt->video_format_is_planar(pix_fmt)) {
+		olive::AVFramePtr frame = AllocFrameViaRuntime(params.width(), params.height(), pix_fmt);
+		if (!frame) {
 			return nullptr;
 		}
 		const int linesize_pixels = BytesToPixels(frame->linesize[0], params);
 		texture->renderer()->DownloadFromTexture(texture->id(), params,
-												 frame->data[0],
-												 linesize_pixels);
+															 frame->data[0],
+															 linesize_pixels);
 		return frame;
 	}
 
@@ -155,45 +158,31 @@ static olive::AVFramePtr ReadbackTextureToFrame(olive::TexturePtr texture,
 		params.width(), params.height(), olive::core::PixelFormat::U8, 4,
 		params.pixel_aspect_ratio(), params.interlacing(), params.divider());
 
-	olive::AVFramePtr rgba_frame = olive::CreateAVFramePtr();
-	rgba_frame->format = AV_PIX_FMT_RGBA;
-	rgba_frame->width = params.width();
-	rgba_frame->height = params.height();
-	if (av_frame_get_buffer(rgba_frame.get(), 0) < 0) {
+	olive::AVFramePtr rgba_frame = AllocFrameViaRuntime(params.width(), params.height(), AV_PIX_FMT_RGBA);
+	if (!rgba_frame) {
 		return nullptr;
 	}
 
 	const int linesize_pixels =
 		BytesToPixels(rgba_frame->linesize[0], rgba_params);
 	texture->renderer()->DownloadFromTexture(texture->id(), rgba_params,
-											 rgba_frame->data[0],
-											 linesize_pixels);
+															 rgba_frame->data[0],
+															 linesize_pixels);
 
-	olive::AVFramePtr dst = olive::CreateAVFramePtr();
-	dst->format = pix_fmt;
-	dst->width = params.width();
-	dst->height = params.height();
-	if (av_frame_get_buffer(dst.get(), 0) < 0) {
+	olive::AVFramePtr dst = AllocFrameViaRuntime(params.width(), params.height(), pix_fmt);
+	if (!dst) {
 		return rgba_frame;
 	}
 
-	SwsContext *sws_ctx = sws_getContext(
-		rgba_frame->width, rgba_frame->height,
-		static_cast<AVPixelFormat>(rgba_frame->format),
-		dst->width, dst->height, pix_fmt, SWS_POINT,
-		nullptr, nullptr, nullptr);
-	if (!sws_ctx) {
-		return rgba_frame;
+	if (rt->frame_convert(rgba_frame.get(), dst.get()) == 0) {
+		return dst;
 	}
 
-	sws_scale(sws_ctx, rgba_frame->data, rgba_frame->linesize, 0,
-			  rgba_frame->height, dst->data, dst->linesize);
-	sws_freeContext(sws_ctx);
-	return dst;
+	return rgba_frame;
 }
 
 static olive::AVFramePtr ConvertPackedFloatFrame(olive::AVFramePtr src,
-												 AVPixelFormat dst_fmt)
+												 int dst_fmt)
 {
 	if (!src || !src->data[0]) {
 		return nullptr;
@@ -210,11 +199,8 @@ static olive::AVFramePtr ConvertPackedFloatFrame(olive::AVFramePtr src,
 		return nullptr;
 	}
 
-	olive::AVFramePtr dst = olive::CreateAVFramePtr();
-	dst->format = dst_fmt;
-	dst->width = src->width;
-	dst->height = src->height;
-	if (av_frame_get_buffer(dst.get(), 0) < 0) {
+	olive::AVFramePtr dst = AllocFrameViaRuntime(src->width, src->height, dst_fmt);
+	if (!dst) {
 		return nullptr;
 	}
 
@@ -620,8 +606,8 @@ void olive::plugin::OliveClipInstance::setInputTexture(TexturePtr texture, OfxTi
 	if (!frame || !frame->data[0]) {
 		frame = ReadbackTextureToFrame(texture, params_);
 	}
-	AVPixelFormat expected_fmt =
-		FFmpegUtils::GetFFmpegPixelFormat(params_.format(),
+	int expected_fmt =
+		olive::OakCodecRuntime::Instance()->video_format_to_av(params_.format(),
 										  params_.channel_count());
 	if (expected_fmt == AV_PIX_FMT_NONE) {
 		return;
@@ -698,31 +684,19 @@ void olive::plugin::OliveClipInstance::setInputTexture(TexturePtr texture, OfxTi
 				goto copy_pixels;
 			}
 		}
-		AVFramePtr converted = CreateAVFramePtr();
-		converted->format = expected_fmt;
-		converted->width = params_.width();
-		converted->height = params_.height();
-		if (av_frame_get_buffer(converted.get(), 0) < 0) {
+		AVFramePtr converted = AllocFrameViaRuntime(params_.width(), params_.height(), expected_fmt);
+		if (!converted) {
 			return;
 		}
 
-		SwsContext *sws_ctx = sws_getContext(
-			frame->width, frame->height,
-			static_cast<AVPixelFormat>(frame->format),
-			converted->width, converted->height,
-			static_cast<AVPixelFormat>(converted->format),
-			SWS_POINT, nullptr, nullptr, nullptr);
-		if (!sws_ctx) {
+		auto rt = olive::OakCodecRuntime::Instance();
+		if (rt->frame_convert(frame.get(), converted.get()) != 0) {
 			return;
 		}
-
-		sws_scale(sws_ctx, frame->data, frame->linesize, 0, frame->height,
-				  converted->data, converted->linesize);
-		sws_freeContext(sws_ctx);
 
 		src_frame = converted;
-	}
 
+	}
 copy_pixels:
 	int bytes_per_component = params_.format().byte_count();
 	int bytes_per_row = params_.width() * params_.channel_count() *
