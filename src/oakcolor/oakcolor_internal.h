@@ -30,4 +30,18 @@ struct OakDisplayTransform {
     float display_gamma  = 1.0f;
 };
 
+struct OakColorGPUShader {
+    OCIO_NAMESPACE::GpuShaderDescRcPtr desc;
+    OCIO_NAMESPACE::ConstGPUProcessorRcPtr gpu_processor;
+    std::string shader_text;
+};
+
+struct OakColorGradingPrimary {
+    OCIO_NAMESPACE::GradingPrimaryTransformRcPtr transform;
+    OCIO_NAMESPACE::GradingPrimary values;
+
+    OakColorGradingPrimary(OCIO_NAMESPACE::GradingStyle style)
+        : values(style) {}
+};
+
 #endif /* OAKCOLOR_INTERNAL_H */

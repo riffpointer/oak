@@ -81,6 +81,80 @@ int  oak_display_transform_apply(OakDisplayTransformHandle transform,
                                  int pix_layout);
 
 /* ------------------------------------------------------------------ */
+/*  High-level processor creation (replaces direct config->getProcessor) */
+/* ------------------------------------------------------------------ */
+
+OakColorProcessorHandle oak_color_processor_create_transform(
+    OakColorConfigHandle config,
+    const char* src_space,
+    const char* dst_space,
+    int direction); /* 0 = forward, 1 = inverse */
+
+OakColorProcessorHandle oak_color_processor_create_display(
+    OakColorConfigHandle config,
+    const char* input_space,
+    const char* display_name,
+    const char* view_name,
+    const char* look_name, /* can be NULL */
+    int direction);        /* 0 = forward, 1 = inverse */
+
+/* ------------------------------------------------------------------ */
+/*  GPU Shader generation                                               */
+/* ------------------------------------------------------------------ */
+
+typedef struct OakColorGPUShader* OakColorGPUShaderHandle;
+
+OakColorGPUShaderHandle oak_color_gpu_shader_create(OakColorProcessorHandle processor,
+                                                    const char* function_name,
+                                                    const char* resource_prefix);
+void oak_color_gpu_shader_free(OakColorGPUShaderHandle shader);
+const char* oak_color_gpu_shader_get_text(OakColorGPUShaderHandle shader);
+
+int oak_color_gpu_shader_get_3d_lut_count(OakColorGPUShaderHandle shader);
+int oak_color_gpu_shader_get_3d_lut(OakColorGPUShaderHandle shader, int index,
+                                    const char** out_name, const char** out_sampler,
+                                    unsigned int* out_edge_len, int* out_interpolation,
+                                    const float** out_values);
+
+int oak_color_gpu_shader_get_texture_count(OakColorGPUShaderHandle shader);
+int oak_color_gpu_shader_get_texture(OakColorGPUShaderHandle shader, int index,
+                                     const char** out_name, const char** out_sampler,
+                                     unsigned int* out_width, unsigned int* out_height,
+                                     int* out_channel_count, int* out_dimensions,
+                                     int* out_interpolation,
+                                     const float** out_values);
+
+/* ------------------------------------------------------------------ */
+/*  GradingPrimary transform                                            */
+/* ------------------------------------------------------------------ */
+
+typedef struct OakColorGradingPrimary* OakColorGradingPrimaryHandle;
+
+OakColorGradingPrimaryHandle oak_color_grading_primary_create(int style); /* 0 = lin, 1 = video */
+void oak_color_grading_primary_free(OakColorGradingPrimaryHandle gp);
+
+void oak_color_grading_primary_set_dynamic(OakColorGradingPrimaryHandle gp, bool dynamic);
+void oak_color_grading_primary_set_direction(OakColorGradingPrimaryHandle gp, int direction); /* 0 = forward, 1 = inverse */
+
+void oak_color_grading_primary_set_contrast(OakColorGradingPrimaryHandle gp, const float* rgbm);
+void oak_color_grading_primary_set_offset(OakColorGradingPrimaryHandle gp, const float* rgbm);
+void oak_color_grading_primary_set_exposure(OakColorGradingPrimaryHandle gp, const float* rgbm);
+void oak_color_grading_primary_set_saturation(OakColorGradingPrimaryHandle gp, float val);
+void oak_color_grading_primary_set_pivot(OakColorGradingPrimaryHandle gp, float val);
+void oak_color_grading_primary_set_clamp_black(OakColorGradingPrimaryHandle gp, float val);
+void oak_color_grading_primary_set_clamp_white(OakColorGradingPrimaryHandle gp, float val);
+
+float oak_color_grading_primary_no_clamp_black(void);
+float oak_color_grading_primary_no_clamp_white(void);
+
+OakColorProcessorHandle oak_color_processor_create_from_grading(
+    OakColorConfigHandle config,
+    const char* input_space,
+    const char* output_space,
+    OakColorGradingPrimaryHandle gp,
+    int direction); /* 0 = forward, 1 = inverse */
+
+/* ------------------------------------------------------------------ */
 /*  Metadata & reference space                                          */
 /* ------------------------------------------------------------------ */
 

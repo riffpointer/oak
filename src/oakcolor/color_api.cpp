@@ -288,3 +288,371 @@ bool oak_color_space_equal(OakColorSpaceHandle a, OakColorSpaceHandle b)
     if (!a || !b) return false;
     return a->name == b->name;
 }
+
+/* ------------------------------------------------------------------ */
+/*  High-level processor creation                                       */
+/* ------------------------------------------------------------------ */
+
+OakColorProcessorHandle oak_color_processor_create_transform(
+    OakColorConfigHandle config,
+    const char* src_space,
+    const char* dst_space,
+    int direction)
+{
+    if (!config || !config->config || !src_space || !dst_space) return nullptr;
+    try {
+        OCIO_NAMESPACE::ConstProcessorRcPtr processor;
+        if (direction == 0) {
+            processor = config->config->getProcessor(src_space, dst_space);
+        } else {
+            processor = config->config->getProcessor(dst_space, src_space);
+        }
+        if (!processor) return nullptr;
+        auto* p = new OakColorProcessor();
+        p->processor = processor;
+        p->cpu = processor->getDefaultCPUProcessor();
+        return p;
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+OakColorProcessorHandle oak_color_processor_create_display(
+    OakColorConfigHandle config,
+    const char* input_space,
+    const char* display_name,
+    const char* view_name,
+    const char* look_name,
+    int direction)
+{
+    if (!config || !config->config || !input_space || !display_name || !view_name)
+        return nullptr;
+
+    try {
+        auto dt = OCIO_NAMESPACE::DisplayViewTransform::Create();
+        dt->setSrc(input_space);
+        dt->setDisplay(display_name);
+        dt->setView(view_name);
+        dt->setDirection(direction == 0 ?
+                         OCIO_NAMESPACE::TRANSFORM_DIR_FORWARD :
+                         OCIO_NAMESPACE::TRANSFORM_DIR_INVERSE);
+
+        OCIO_NAMESPACE::ConstProcessorRcPtr processor;
+
+        if (look_name && look_name[0]) {
+            auto group = OCIO_NAMESPACE::GroupTransform::Create();
+
+            const char* out_cs = OCIO_NAMESPACE::LookTransform::GetLooksResultColorSpace(
+                config->config, config->config->getCurrentContext(), look_name);
+
+            auto lt = OCIO_NAMESPACE::LookTransform::Create();
+            lt->setSrc(input_space);
+            lt->setDst(out_cs);
+            lt->setLooks(look_name);
+            lt->setSkipColorSpaceConversion(false);
+            group->appendTransform(lt);
+
+            dt->setSrc(out_cs);
+            group->appendTransform(dt);
+
+            processor = config->config->getProcessor(group);
+        } else {
+            processor = config->config->getProcessor(dt);
+        }
+
+        if (!processor) return nullptr;
+        auto* p = new OakColorProcessor();
+        p->processor = processor;
+        p->cpu = processor->getDefaultCPUProcessor();
+        return p;
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  GPU Shader generation                                               */
+/* ------------------------------------------------------------------ */
+
+OakColorGPUShaderHandle oak_color_gpu_shader_create(OakColorProcessorHandle processor,
+                                                    const char* function_name,
+                                                    const char* resource_prefix)
+{
+    if (!processor || !processor->processor) return nullptr;
+    try {
+        auto gpu = processor->processor->getDefaultGPUProcessor();
+        if (!gpu) return nullptr;
+
+        auto desc = OCIO_NAMESPACE::GpuShaderDesc::CreateShaderDesc();
+        desc->setLanguage(OCIO_NAMESPACE::GPU_LANGUAGE_GLSL_ES_3_0);
+        if (function_name && function_name[0]) {
+            desc->setFunctionName(function_name);
+        }
+        if (resource_prefix && resource_prefix[0]) {
+            desc->setResourcePrefix(resource_prefix);
+        }
+
+        gpu->extractGpuShaderInfo(desc);
+
+        auto* s = new OakColorGPUShader();
+        s->desc = desc;
+        s->gpu_processor = gpu;
+        s->shader_text = desc->getShaderText();
+        return s;
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+void oak_color_gpu_shader_free(OakColorGPUShaderHandle shader)
+{
+    delete shader;
+}
+
+const char* oak_color_gpu_shader_get_text(OakColorGPUShaderHandle shader)
+{
+    if (!shader) return nullptr;
+    return shader->shader_text.c_str();
+}
+
+int oak_color_gpu_shader_get_3d_lut_count(OakColorGPUShaderHandle shader)
+{
+    if (!shader || !shader->desc) return 0;
+    try {
+        return static_cast<int>(shader->desc->getNum3DTextures());
+    } catch (...) {
+        return 0;
+    }
+}
+
+int oak_color_gpu_shader_get_3d_lut(OakColorGPUShaderHandle shader, int index,
+                                    const char** out_name, const char** out_sampler,
+                                    unsigned int* out_edge_len, int* out_interpolation,
+                                    const float** out_values)
+{
+    if (!shader || !shader->desc || index < 0) return -1;
+    try {
+        const char* tex_name = nullptr;
+        const char* sampler_name = nullptr;
+        unsigned int edge_len = 0;
+        OCIO_NAMESPACE::Interpolation interpolation = OCIO_NAMESPACE::INTERP_LINEAR;
+
+        shader->desc->get3DTexture(index, tex_name, sampler_name, edge_len, interpolation);
+        if (!tex_name || !sampler_name) return -1;
+
+        const float* values = nullptr;
+        shader->desc->get3DTextureValues(index, values);
+        if (!values) return -1;
+
+        if (out_name) *out_name = tex_name;
+        if (out_sampler) *out_sampler = sampler_name;
+        if (out_edge_len) *out_edge_len = edge_len;
+        if (out_interpolation) {
+            *out_interpolation = (interpolation == OCIO_NAMESPACE::INTERP_NEAREST) ? 0 : 1;
+        }
+        if (out_values) *out_values = values;
+        return 0;
+    } catch (...) {
+        return -1;
+    }
+}
+
+int oak_color_gpu_shader_get_texture_count(OakColorGPUShaderHandle shader)
+{
+    if (!shader || !shader->desc) return 0;
+    try {
+        return static_cast<int>(shader->desc->getNumTextures());
+    } catch (...) {
+        return 0;
+    }
+}
+
+int oak_color_gpu_shader_get_texture(OakColorGPUShaderHandle shader, int index,
+                                     const char** out_name, const char** out_sampler,
+                                     unsigned int* out_width, unsigned int* out_height,
+                                     int* out_channel_count, int* out_dimensions,
+                                     int* out_interpolation,
+                                     const float** out_values)
+{
+    if (!shader || !shader->desc || index < 0) return -1;
+    try {
+        const char* tex_name = nullptr;
+        const char* sampler_name = nullptr;
+        unsigned int width = 0, height = 0;
+        OCIO_NAMESPACE::GpuShaderDesc::TextureType channel =
+            OCIO_NAMESPACE::GpuShaderDesc::TEXTURE_RGB_CHANNEL;
+        OCIO_NAMESPACE::Interpolation interpolation = OCIO_NAMESPACE::INTERP_LINEAR;
+        OCIO_NAMESPACE::GpuShaderDesc::TextureDimensions dimensions =
+            OCIO_NAMESPACE::GpuShaderDesc::TEXTURE_2D;
+
+        shader->desc->getTexture(index, tex_name, sampler_name, width, height,
+                                 channel, dimensions, interpolation);
+        if (!tex_name || !sampler_name) return -1;
+
+        const float* values = nullptr;
+        shader->desc->getTextureValues(index, values);
+        if (!values) return -1;
+
+        if (out_name) *out_name = tex_name;
+        if (out_sampler) *out_sampler = sampler_name;
+        if (out_width) *out_width = width;
+        if (out_height) *out_height = height;
+        if (out_channel_count) {
+            *out_channel_count = (channel == OCIO_NAMESPACE::GpuShaderDesc::TEXTURE_RED_CHANNEL) ? 1 : 3;
+        }
+        if (out_dimensions) {
+            *out_dimensions = (dimensions == OCIO_NAMESPACE::GpuShaderDesc::TEXTURE_1D) ? 1 : 2;
+        }
+        if (out_interpolation) {
+            *out_interpolation = (interpolation == OCIO_NAMESPACE::INTERP_NEAREST) ? 0 : 1;
+        }
+        if (out_values) *out_values = values;
+        return 0;
+    } catch (...) {
+        return -1;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  GradingPrimary transform                                            */
+/* ------------------------------------------------------------------ */
+
+OakColorGradingPrimaryHandle oak_color_grading_primary_create(int style)
+{
+    try {
+        auto style_ocio = (style == 0) ? OCIO_NAMESPACE::GRADING_LIN : OCIO_NAMESPACE::GRADING_VIDEO;
+        auto* gp = new OakColorGradingPrimary(style_ocio);
+        gp->transform = OCIO_NAMESPACE::GradingPrimaryTransform::Create(style_ocio);
+        return gp;
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+void oak_color_grading_primary_free(OakColorGradingPrimaryHandle gp)
+{
+    delete gp;
+}
+
+void oak_color_grading_primary_set_dynamic(OakColorGradingPrimaryHandle gp, bool dynamic)
+{
+    if (!gp || !gp->transform) return;
+    try {
+        gp->transform->makeDynamic();
+    } catch (...) {}
+}
+
+void oak_color_grading_primary_set_direction(OakColorGradingPrimaryHandle gp, int direction)
+{
+    if (!gp || !gp->transform) return;
+    try {
+        gp->transform->setDirection(direction == 0 ?
+                                    OCIO_NAMESPACE::TRANSFORM_DIR_FORWARD :
+                                    OCIO_NAMESPACE::TRANSFORM_DIR_INVERSE);
+    } catch (...) {}
+}
+
+void oak_color_grading_primary_set_contrast(OakColorGradingPrimaryHandle gp, const float* rgbm)
+{
+    if (!gp || !rgbm) return;
+    gp->values.m_contrast.m_red = rgbm[0];
+    gp->values.m_contrast.m_green = rgbm[1];
+    gp->values.m_contrast.m_blue = rgbm[2];
+    gp->values.m_contrast.m_master = rgbm[3];
+    try {
+        if (gp->transform) gp->transform->setValue(gp->values);
+    } catch (...) {}
+}
+
+void oak_color_grading_primary_set_offset(OakColorGradingPrimaryHandle gp, const float* rgbm)
+{
+    if (!gp || !rgbm) return;
+    gp->values.m_offset.m_red = rgbm[0];
+    gp->values.m_offset.m_green = rgbm[1];
+    gp->values.m_offset.m_blue = rgbm[2];
+    gp->values.m_offset.m_master = rgbm[3];
+    try {
+        if (gp->transform) gp->transform->setValue(gp->values);
+    } catch (...) {}
+}
+
+void oak_color_grading_primary_set_exposure(OakColorGradingPrimaryHandle gp, const float* rgbm)
+{
+    if (!gp || !rgbm) return;
+    gp->values.m_exposure.m_red = rgbm[0];
+    gp->values.m_exposure.m_green = rgbm[1];
+    gp->values.m_exposure.m_blue = rgbm[2];
+    gp->values.m_exposure.m_master = rgbm[3];
+    try {
+        if (gp->transform) gp->transform->setValue(gp->values);
+    } catch (...) {}
+}
+
+void oak_color_grading_primary_set_saturation(OakColorGradingPrimaryHandle gp, float val)
+{
+    if (!gp) return;
+    gp->values.m_saturation = val;
+    try {
+        if (gp->transform) gp->transform->setValue(gp->values);
+    } catch (...) {}
+}
+
+void oak_color_grading_primary_set_pivot(OakColorGradingPrimaryHandle gp, float val)
+{
+    if (!gp) return;
+    gp->values.m_pivot = val;
+    try {
+        if (gp->transform) gp->transform->setValue(gp->values);
+    } catch (...) {}
+}
+
+void oak_color_grading_primary_set_clamp_black(OakColorGradingPrimaryHandle gp, float val)
+{
+    if (!gp) return;
+    gp->values.m_clampBlack = val;
+    try {
+        if (gp->transform) gp->transform->setValue(gp->values);
+    } catch (...) {}
+}
+
+void oak_color_grading_primary_set_clamp_white(OakColorGradingPrimaryHandle gp, float val)
+{
+    if (!gp) return;
+    gp->values.m_clampWhite = val;
+    try {
+        if (gp->transform) gp->transform->setValue(gp->values);
+    } catch (...) {}
+}
+
+float oak_color_grading_primary_no_clamp_black(void)
+{
+    return OCIO_NAMESPACE::GradingPrimary::NoClampBlack();
+}
+
+float oak_color_grading_primary_no_clamp_white(void)
+{
+    return OCIO_NAMESPACE::GradingPrimary::NoClampWhite();
+}
+
+OakColorProcessorHandle oak_color_processor_create_from_grading(
+    OakColorConfigHandle config,
+    const char* input_space,
+    const char* output_space,
+    OakColorGradingPrimaryHandle gp,
+    int direction)
+{
+    if (!config || !config->config || !gp || !gp->transform) return nullptr;
+    try {
+        gp->transform->setDirection(direction == 0 ?
+                                    OCIO_NAMESPACE::TRANSFORM_DIR_FORWARD :
+                                    OCIO_NAMESPACE::TRANSFORM_DIR_INVERSE);
+        auto processor = config->config->getProcessor(gp->transform);
+        if (!processor) return nullptr;
+        auto* p = new OakColorProcessor();
+        p->processor = processor;
+        p->cpu = processor->getDefaultCPUProcessor();
+        return p;
+    } catch (...) {
+        return nullptr;
+    }
+}
