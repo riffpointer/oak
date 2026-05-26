@@ -1087,55 +1087,53 @@ int oak_decoder_is_open(OakDecoderHandle decoder)
 /*  File probe                                                          */
 /* ================================================================ */
 
-int oak_decoder_probe_file(OakDecoderHandle decoder, const char* filepath,
-                           OakMediaInfo* out_info)
+OakMediaInfo* oak_decoder_probe_file(OakDecoderHandle decoder, const char* filepath)
 {
     auto* wrapper = reinterpret_cast<oakcodec::OakDecoderWrapper*>(decoder);
-    if (!wrapper || !wrapper->decoder || !filepath) return -1;
+    if (!wrapper || !wrapper->decoder || !filepath) return nullptr;
 
     olive::CancelAtom cancel;
     olive::FootageDescription desc = wrapper->decoder->Probe(QString::fromUtf8(filepath), &cancel);
-    if (!desc.IsValid()) return -1;
+    if (!desc.IsValid()) return nullptr;
 
     wrapper->desc = desc;
 
-    if (out_info) {
-        out_info->video_stream_count = desc.GetVideoStreams().size();
-        out_info->audio_stream_count = desc.GetAudioStreams().size();
-        out_info->subtitle_stream_count = desc.GetSubtitleStreams().size();
+    auto* out_info = new OakMediaInfo();
+    out_info->video_stream_count = desc.GetVideoStreams().size();
+    out_info->audio_stream_count = desc.GetAudioStreams().size();
+    out_info->subtitle_stream_count = desc.GetSubtitleStreams().size();
 
-        if (out_info->video_stream_count > 0) {
-            out_info->video_streams = new OakVideoStreamInfo[out_info->video_stream_count];
-            for (int i = 0; i < out_info->video_stream_count; i++) {
-                const olive::VideoParams& vp = desc.GetVideoStreams().at(i);
-                out_info->video_streams[i] = {
-                    vp.width(), vp.height(),
-                    OlivePixFmtToOakFrame(vp.format(), vp.channel_count()),
-                    vp.time_base().numerator(), vp.time_base().denominator(),
-                    vp.frame_rate().toDouble(), vp.duration()
-                };
-            }
-        } else {
-            out_info->video_streams = nullptr;
+    if (out_info->video_stream_count > 0) {
+        out_info->video_streams = new OakVideoStreamInfo[out_info->video_stream_count];
+        for (int i = 0; i < out_info->video_stream_count; i++) {
+            const olive::VideoParams& vp = desc.GetVideoStreams().at(i);
+            out_info->video_streams[i] = {
+                vp.width(), vp.height(),
+                OlivePixFmtToOakFrame(vp.format(), vp.channel_count()),
+                vp.time_base().numerator(), vp.time_base().denominator(),
+                vp.frame_rate().toDouble(), vp.duration()
+            };
         }
-
-        if (out_info->audio_stream_count > 0) {
-            out_info->audio_streams = new OakAudioStreamInfo[out_info->audio_stream_count];
-            for (int i = 0; i < out_info->audio_stream_count; i++) {
-                const olive::AudioParams& ap = desc.GetAudioStreams().at(i);
-                out_info->audio_streams[i] = {
-                    ap.sample_rate(), ap.channel_count(),
-                    OliveAudioFmtToOak(ap.format()),
-                    ap.time_base().numerator(), ap.time_base().denominator(),
-                    ap.duration()
-                };
-            }
-        } else {
-            out_info->audio_streams = nullptr;
-        }
+    } else {
+        out_info->video_streams = nullptr;
     }
 
-    return 0;
+    if (out_info->audio_stream_count > 0) {
+        out_info->audio_streams = new OakAudioStreamInfo[out_info->audio_stream_count];
+        for (int i = 0; i < out_info->audio_stream_count; i++) {
+            const olive::AudioParams& ap = desc.GetAudioStreams().at(i);
+            out_info->audio_streams[i] = {
+                ap.sample_rate(), ap.channel_count(),
+                OliveAudioFmtToOak(ap.format()),
+                ap.time_base().numerator(), ap.time_base().denominator(),
+                ap.duration()
+            };
+        }
+    } else {
+        out_info->audio_streams = nullptr;
+    }
+
+    return out_info;
 }
 
 /* ================================================================ */

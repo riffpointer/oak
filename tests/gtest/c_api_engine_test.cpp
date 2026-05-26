@@ -27,13 +27,11 @@ TEST_F(CAPEngineTest, LoadValidXml) {
 
 TEST_F(CAPEngineTest, LoadEmptyString) {
     OakEngineProjectHandle proj = oak_engine_project_load_xml("");
-    // Empty string may create an empty project or return null; accept either
     if (proj) oak_engine_project_destroy(proj);
 }
 
 TEST_F(CAPEngineTest, LoadMalformedXml) {
     OakEngineProjectHandle proj = oak_engine_project_load_xml("<not-xml");
-    // Malformed XML may be handled gracefully; accept either null or a project
     if (proj) oak_engine_project_destroy(proj);
 }
 
@@ -47,7 +45,6 @@ TEST_F(CAPEngineTest, ProjectNodeCountAfterLoad) {
 
 TEST_F(CAPEngineTest, ProjectNodeCountNull) {
     int count = oak_engine_project_node_count(nullptr);
-    // Null project returns 0 or -1 depending on implementation
     EXPECT_LE(count, 0);
 }
 
@@ -59,7 +56,6 @@ TEST_F(CAPEngineTest, ProjectDoubleDestroy) {
     OakEngineProjectHandle proj = oak_engine_project_load_xml(MinimalXml());
     ASSERT_NE(proj, nullptr);
     oak_engine_project_destroy(proj);
-    // Double destroy may crash; do not test it explicitly
 }
 
 TEST_F(CAPEngineTest, SessionCreateValid) {
@@ -104,6 +100,15 @@ TEST_F(CAPEngineTest, SessionCreateZeroTimebaseDen) {
     ASSERT_NE(proj, nullptr);
     OakEngineSessionHandle session = oak_engine_session_create(
         proj, 1920, 1080, 2, 1, 0);
+    EXPECT_EQ(session, nullptr);
+    oak_engine_project_destroy(proj);
+}
+
+TEST_F(CAPEngineTest, SessionCreateInvalidPixelFormat) {
+    OakEngineProjectHandle proj = oak_engine_project_load_xml(MinimalXml());
+    ASSERT_NE(proj, nullptr);
+    OakEngineSessionHandle session = oak_engine_session_create(
+        proj, 1920, 1080, -1 /* Invalid */, 1, 24);
     EXPECT_EQ(session, nullptr);
     oak_engine_project_destroy(proj);
 }
@@ -165,6 +170,40 @@ TEST_F(CAPEngineTest, RenderFrameNullFrame) {
     }
     int ret = oak_engine_session_render_frame(session, 0, 1, nullptr);
     EXPECT_NE(ret, 0);
+    oak_engine_session_destroy(session);
+    oak_engine_project_destroy(proj);
+}
+
+TEST_F(CAPEngineTest, RenderFrameAtDuration) {
+    OakEngineProjectHandle proj = oak_engine_project_load_xml(MinimalXml());
+    ASSERT_NE(proj, nullptr);
+    OakEngineSessionHandle session = oak_engine_session_create(
+        proj, 1920, 1080, 2, 1, 24);
+    if (!session) {
+        GTEST_SKIP() << "Session creation failed";
+    }
+    OakFrame frame = {};
+    int ret = oak_engine_session_render_frame(session, 100, 1, &frame);
+    if (ret == 0) {
+        oak_frame_release(&frame);
+    }
+    oak_engine_session_destroy(session);
+    oak_engine_project_destroy(proj);
+}
+
+TEST_F(CAPEngineTest, RenderFrameLargeTime) {
+    OakEngineProjectHandle proj = oak_engine_project_load_xml(MinimalXml());
+    ASSERT_NE(proj, nullptr);
+    OakEngineSessionHandle session = oak_engine_session_create(
+        proj, 1920, 1080, 2, 1, 24);
+    if (!session) {
+        GTEST_SKIP() << "Session creation failed";
+    }
+    OakFrame frame = {};
+    int ret = oak_engine_session_render_frame(session, 999999, 1, &frame);
+    if (ret == 0) {
+        oak_frame_release(&frame);
+    }
     oak_engine_session_destroy(session);
     oak_engine_project_destroy(proj);
 }

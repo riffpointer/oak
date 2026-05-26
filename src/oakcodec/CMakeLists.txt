@@ -36,6 +36,7 @@ set(OAKCODEC_SOURCES
     exportformat.cpp
     footagedescription.cpp
     planarfiledevice.cpp
+    ffmpeg_utils.cpp
     ffmpeg/ffmpegdecoder.cpp
     ffmpeg/ffmpegencoder.cpp
     oiio/oiiodecoder.cpp

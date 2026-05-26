@@ -5,6 +5,10 @@ add_executable(olive-gtest
   c_api_color_test.cpp
   c_api_renderer_test.cpp
   c_api_integration_test.cpp
+  c_api_audio_test.cpp
+  c_api_pluginhost_test.cpp
+  c_api_edge_test.cpp
+  ${CMAKE_SOURCE_DIR}/src/oakpluginhost/pluginhost_api.cpp
 )
 
 target_include_directories(
@@ -21,6 +25,7 @@ target_link_libraries(
   oakcodec
   oakcolor
   oakgl
+  oakaudio
   oakshared
   GTest::gtest
 )
