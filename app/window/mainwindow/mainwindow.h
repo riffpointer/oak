@@ -109,8 +109,13 @@ protected:
 	virtual void closeEvent(QCloseEvent *e) override;
 
 #ifdef Q_OS_WINDOWS
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
 	virtual bool nativeEvent(const QByteArray &eventType, void *message,
-							 long *result);
+							 qintptr *result) override;
+#else
+	virtual bool nativeEvent(const QByteArray &eventType, void *message,
+							 long *result) override;
+#endif
 #endif
 
 private:

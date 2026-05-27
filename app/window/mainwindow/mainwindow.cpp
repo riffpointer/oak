@@ -498,8 +498,13 @@ void MainWindow::closeEvent(QCloseEvent *e)
 }
 
 #ifdef Q_OS_WINDOWS
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+bool MainWindow::nativeEvent(const QByteArray &eventType, void *message,
+							 qintptr *result)
+#else
 bool MainWindow::nativeEvent(const QByteArray &eventType, void *message,
 							 long *result)
+#endif
 {
 	if (static_cast<MSG *>(message)->message == taskbar_btn_id_) {
 		// Attempt to create taskbar button progress handle

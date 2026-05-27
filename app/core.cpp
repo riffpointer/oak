@@ -33,7 +33,9 @@
 #include <QStyleFactory>
 #include "window/mainwindow/mainwindowundo.h"
 #ifdef Q_OS_WINDOWS
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 #include <QtPlatformHeaders/QWindowsWindowFunctions>
+#endif
 #endif
 
 #include "audio/audiomanager.h"
@@ -910,10 +912,12 @@ void Core::StartGUI(bool full_screen)
 	}
 
 #ifdef Q_OS_WINDOWS
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 	// Workaround for Qt bug where menus don't appear in full screen mode
 	// See: https://doc.qt.io/qt-5/windows-issues.html
 	QWindowsWindowFunctions::setHasBorderInFullScreen(
 		main_window_->windowHandle(), true);
+#endif
 #endif
 
 	// Start autorecovery timer using the config value as its interval
