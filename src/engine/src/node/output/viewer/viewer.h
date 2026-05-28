@@ -22,7 +22,7 @@
 #ifndef VIEWER_H
 #define VIEWER_H
 
-#include "codec/encoder.h"
+#include "encoder.h"
 #include "node/node.h"
 #include "node/output/track/track.h"
 #include "render/audioplaybackcache.h"

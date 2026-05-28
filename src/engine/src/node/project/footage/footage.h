@@ -27,7 +27,7 @@
 #include <QDateTime>
 
 #include "codec/decoder_proxy.h"
-#include "codec/footage_description.h"
+#include "footagedescription.h"
 #include "node/output/viewer/viewer.h"
 #include "olive/common/cancelatom.h"
 #include "olive/render/videoparams.h"

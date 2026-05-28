@@ -10,14 +10,14 @@
 #include <QHash>
 
 #include "codec/codec_stream.h"
-#include "codec/footage_description.h"
+#include "footagedescription.h"
 #include "olive/common/cancelatom.h"
 #include "oak/codec_api.h"
-#include "codec/avframe_types.h"
+#include "ffmpeg_utils.h"
 #include "olive/render/videoparams.h"
 #include "olive/core/render/audioparams.h"
 #include "olive/core/util/rational.h"
-#include "render/loopmode.h"
+#include "loopmode.h"
 #include "render/rendermode.h"
 #include "node/block/block.h"
 

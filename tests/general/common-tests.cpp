@@ -21,7 +21,7 @@
 
 #include "testutil.h"
 
-#include "common/digit.h"
+#include "olive/common/digit.h"
 
 namespace olive
 {

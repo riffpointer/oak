@@ -21,6 +21,7 @@
 
 #include "footagedescription.h"
 
+#include <QDebug>
 #include <QFile>
 #include <QXmlStreamReader>
 #include <QXmlStreamWriter>

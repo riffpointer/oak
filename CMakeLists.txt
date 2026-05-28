@@ -120,7 +120,7 @@ list(APPEND OLIVE_LIBRARIES ${OPENEXR_LIBRARIES})
 list(APPEND OLIVE_INCLUDE_DIRS ${OPENEXR_INCLUDES})
 
 # Link Olive
-list(APPEND OLIVE_LIBRARIES olivecore)
+list(APPEND OLIVE_LIBRARIES oakshared)
 list(APPEND OLIVE_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/shared/include)
 
 
@@ -290,7 +290,7 @@ add_subdirectory(src/oakpluginhost)
 add_subdirectory(src/renderer)
 add_subdirectory(ext)
 add_subdirectory(third_party/openfx/HostSupport)
-add_subdirectory(app)
+add_subdirectory(src/app)
 
 if (BUILD_TESTS)
   enable_testing()

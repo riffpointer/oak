@@ -44,7 +44,10 @@ function(olive_add_test GROUP NAME SOURCE)
   target_include_directories(
     ${NAME}
     PRIVATE
-    ${CMAKE_SOURCE_DIR}/app
+    ${CMAKE_SOURCE_DIR}/src/app
+    ${CMAKE_SOURCE_DIR}/src/engine/src
+    ${CMAKE_SOURCE_DIR}/src/oakcodec
+    ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/tests
     ${CMAKE_SOURCE_DIR}/third_party/openfx/include
     ${CMAKE_SOURCE_DIR}/third_party/openfx/HostSupport/include
@@ -54,6 +57,8 @@ function(olive_add_test GROUP NAME SOURCE)
     ${NAME}
     PRIVATE
     ${OLIVE_LIBRARIES}
+    oakengine
+    oakcodec
   )
   target_compile_definitions(
     ${NAME}

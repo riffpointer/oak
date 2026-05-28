@@ -28,7 +28,7 @@
 #include <QStandardPaths>
 #include <QXmlStreamWriter>
 
-#include "codec/exportformat.h"
+#include "exportformat.h"
 #include "olive/common/autoscroll.h"
 #include "olive/common/filefunctions.h"
 #include "olive/common/xmlutils.h"

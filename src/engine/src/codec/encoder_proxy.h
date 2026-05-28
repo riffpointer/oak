@@ -5,7 +5,7 @@
 
 #include <QString>
 #include <QVector>
-#include "codec/encoder.h"
+#include "encoder.h"
 #include "olive/render/videoparams.h"
 #include "olive/core/render/audioparams.h"
 #include "oak/codec_api.h"

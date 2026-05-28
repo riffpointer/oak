@@ -87,6 +87,7 @@ public:
     const QString &video_pix_fmt() const { return video_pix_fmt_; }
     bool video_is_image_sequence() const { return video_is_image_sequence_; }
     const QString &color_transform_output() const { return color_transform_output_; }
+    void set_color_transform_output(const QString &output) { color_transform_output_ = output; }
 
     bool audio_enabled() const { return audio_enabled_; }
     const ExportCodec::Codec &audio_codec() const { return audio_codec_; }

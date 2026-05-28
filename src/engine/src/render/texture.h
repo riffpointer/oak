@@ -22,7 +22,7 @@
 #ifndef RENDERTEXTURE_H
 #define RENDERTEXTURE_H
 
-#include "codec/avframe_types.h"
+#include "ffmpeg_utils.h"
 
 #include <atomic>
 #include <memory>

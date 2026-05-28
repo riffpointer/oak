@@ -44,7 +44,7 @@
 #include "undo/undostack.h"
 #include "pluginSupport/OliveClip.h"
 #include "pluginSupport/OlivePluginInstance.h"
-#include "codec/avframe_types.h"
+#include "ffmpeg_utils.h"
 #include "ofxhParam.h"
 #include "ofxImageEffect.h"
 #include "ofxhUtilities.h"

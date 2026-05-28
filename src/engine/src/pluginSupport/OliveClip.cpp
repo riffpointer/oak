@@ -24,7 +24,7 @@
 #include "OliveClip.h"
 
 #include "common/Current.h"
-#include "codec/avframe_types.h"
+#include "ffmpeg_utils.h"
 #include "ofxCore.h"
 #include "ofxhClip.h"
 #include "pluginSupport/image.h"
@@ -35,7 +35,7 @@
 #ifdef OFX_SUPPORTS_OPENGLRENDER
 #include <QOpenGLFunctions>
 #endif
-#include "codec/avframe_types.h"
+#include "ffmpeg_utils.h"
 #include "runtime/oak_codec_runtime.h"
 #include "render/renderer.h"
 

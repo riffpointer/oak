@@ -24,7 +24,7 @@
 #include "ofxImageEffect.h"
 #include "ofxhClip.h"
 #include "olive/core/render/pixelformat.h"
-#include "render/loopmode.h"
+#include "loopmode.h"
 #include "olive/render/videoparams.h"
 #include <cstdint>
 #include <string>

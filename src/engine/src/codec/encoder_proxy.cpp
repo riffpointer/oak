@@ -2,8 +2,8 @@
 
 #include "encoder_proxy.h"
 #include "runtime/oak_codec_runtime.h"
-#include "codec/exportformat.h"
-#include "codec/exportcodec.h"
+#include "exportformat.h"
+#include "exportcodec.h"
 
 namespace olive {
 

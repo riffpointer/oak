@@ -24,10 +24,14 @@
 
 #include <QList>
 
+class QAction;
+
 #include "node.h"
 
 namespace olive
 {
+
+class Menu;
 
 class NodeFactory {
 public:
@@ -100,6 +104,14 @@ public:
 	static Node *CreateFromFactoryIndex(const InternalID &id);
 
 	static const QList<Node *> &GetLibrary();
+
+	static Menu *CreateMenu(QWidget *parent, bool create_none_item = false,
+							Node::CategoryID restrict_to = Node::kCategoryUnknown,
+							uint64_t restrict_flags = 0);
+
+	static Node *CreateFromMenuAction(QAction *action);
+
+	static QString GetIDFromMenuAction(QAction *action);
 
 private:
 	static QList<Node *> library_;

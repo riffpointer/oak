@@ -24,7 +24,7 @@
 
 #include <QVector2D>
 
-#include "render/loopmode.h"
+#include "loopmode.h"
 #include "olive/render/videoparams.h"
 
 namespace olive

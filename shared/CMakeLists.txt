@@ -28,6 +28,7 @@ set(SHARED_SOURCES
   src/common/xmlutils.cpp
   # Headers with Q_OBJECT that need moc
   include/olive/render/framemanager.h
+  include/olive/common/colorcoding.h
 )
 
 add_library(oakshared STATIC ${SHARED_SOURCES})
