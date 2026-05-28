@@ -284,10 +284,15 @@ bool Renderer::GetColorContext(const ColorTransformJob &color_job,
 			OCIO::GpuShaderDesc::TextureType channel =
 				OCIO::GpuShaderDesc::TEXTURE_RGB_CHANNEL;
 			OCIO::Interpolation interpolation = OCIO::INTERP_LINEAR;
+#if OCIO_VERSION_MAJOR > 2 || (OCIO_VERSION_MAJOR == 2 && OCIO_VERSION_MINOR >= 3)
 			OCIO::GpuShaderDesc::TextureDimensions dimensions =
 				OCIO::GpuShaderDesc::TEXTURE_2D;
 			shader_desc->getTexture(i, tex_name, sampler_name, width, height,
 									channel, dimensions, interpolation);
+#else
+			shader_desc->getTexture(i, tex_name, sampler_name, width, height,
+									channel, interpolation);
+#endif
 
 			if (!tex_name || !*tex_name || !sampler_name || !*sampler_name ||
 				!width) {

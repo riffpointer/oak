@@ -176,8 +176,8 @@ jobs:
         shell: msys2 {0}
         run: |
           cd openfx-misc
-          make -j4
-          make install
+          mingw32-make -j4
+          mingw32-make install
           PLUGIN_FILE=$(find /usr/OFX/Plugins /usr/local/OFX/Plugins . -name "*.ofx.bundle" -print -quit 2>/dev/null | head -1)
           if [ -n "$PLUGIN_FILE" ]; then
             PLUGIN_DIR=$(dirname "$PLUGIN_FILE")
