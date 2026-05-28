@@ -10,7 +10,7 @@
 
 SetCompressor lzma
 
-Name ${APP_NAME}
+Name "${APP_NAME}"
 
 ManifestDPIAware true
 Unicode true

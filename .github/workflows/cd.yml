@@ -132,30 +132,25 @@ jobs:
           path: Oak-Video-Editor-macOS.dmg
 
   # ------------------------------------------------------------------
-  # Linux AppImage (Arch Linux — latest FFmpeg)
+  # Linux AppImage (Ubuntu 24.04 — distro FFmpeg 6.x)
   # ------------------------------------------------------------------
   appimage:
-    runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
+    runs-on: ubuntu-24.04
     steps:
-      - name: Initialize pacman
-        run: |
-          pacman-key --init
-          pacman-key --populate archlinux
-          pacman -Sy --noconfirm archlinux-keyring
-
-      - name: Install dependencies
-        run: |
-          pacman -Syu --noconfirm \
-            base-devel cmake ninja git wget fuse2 desktop-file-utils \
-            qt6-base qt6-tools \
-            ffmpeg openimageio opencolorio openexr expat portaudio \
-            fmt mesa libxkbcommon
-
       - uses: actions/checkout@v4
         with:
           submodules: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build pkg-config \
+            qt6-base-dev qt6-base-dev-tools qt6-base-private-dev qt6-tools-dev qt6-tools-dev-tools \
+            libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev \
+            libopencolorio-dev libopenimageio-dev libopenexr-dev libexpat1-dev \
+            portaudio19-dev libgl1-mesa-dev libxkbcommon-dev \
+            wget fuse3 desktop-file-utils
 
       - name: Build
         run: |
