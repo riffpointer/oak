@@ -1107,7 +1107,11 @@ void ViewerDisplayWidget::EmitColorAtCursor(QMouseEvent *e)
 
 			reference =
 				renderer()->GetPixelFromTexture(texture_.get(), pixel_pos);
-			display = color_service()->ConvertColor(reference);
+			if (color_service()) {
+				display = color_service()->ConvertColor(reference);
+			} else {
+				display = reference;
+			}
 		}
 
 		emit CursorColor(reference, display);

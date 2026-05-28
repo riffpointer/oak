@@ -97,6 +97,10 @@ ColorProcessor::ColorProcessor(OCIO::ConstProcessorRcPtr processor)
 
 void ColorProcessor::ConvertFrame(Frame *f)
 {
+	if (!cpu_processor_) {
+		return;
+	}
+
 	OCIO::BitDepth ocio_bit_depth =
 		OCIOUtils::GetOCIOBitDepthFromPixelFormat(f->format());
 
@@ -115,6 +119,10 @@ void ColorProcessor::ConvertFrame(Frame *f)
 
 Color ColorProcessor::ConvertColor(const Color &in)
 {
+	if (!cpu_processor_) {
+		return in;
+	}
+
 	// I've been bamboozled
 	float c[4] = { float(in.red()), float(in.green()), float(in.blue()),
 				   float(in.alpha()) };
