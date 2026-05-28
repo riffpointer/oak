@@ -1,0 +1,224 @@
+name: CD
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # ------------------------------------------------------------------
+  # Windows Installer (MSYS2)
+  # ------------------------------------------------------------------
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-qt6-base
+            mingw-w64-ucrt-x86_64-qt6-tools
+            mingw-w64-ucrt-x86_64-ffmpeg
+            mingw-w64-ucrt-x86_64-openimageio
+            mingw-w64-ucrt-x86_64-opencolorio
+            mingw-w64-ucrt-x86_64-openexr
+            mingw-w64-ucrt-x86_64-fmt
+            mingw-w64-ucrt-x86_64-expat
+            mingw-w64-ucrt-x86_64-portaudio
+            mingw-w64-ucrt-x86_64-nsis
+
+      - name: Configure
+        shell: msys2 {0}
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DBUILD_QT6=ON \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        shell: msys2 {0}
+        run: cmake --build build --config Release
+
+      - name: Deploy Qt dependencies
+        shell: msys2 {0}
+        run: |
+          mkdir -p app/packaging/windows/nsis/olive-editor
+          cp build/app/olive-editor.exe app/packaging/windows/nsis/olive-editor/
+          windeployqt6 app/packaging/windows/nsis/olive-editor/olive-editor.exe
+
+      - name: Build installer
+        shell: msys2 {0}
+        run: |
+          cd app/packaging/windows/nsis
+          cp "${GITHUB_WORKSPACE}"/LICENSE .
+          makensis olive.nsi
+          mv setup.exe "${GITHUB_WORKSPACE}"/Oak-Video-Editor-Windows-x64.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: oak-windows-installer
+          path: Oak-Video-Editor-Windows-x64.exe
+
+  # ------------------------------------------------------------------
+  # macOS DMG
+  # ------------------------------------------------------------------
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install cmake ninja pkg-config qt@6 ffmpeg openimageio opencolorio openexr portaudio expat
+
+      - name: Build OpenTimelineIO
+        run: |
+          git clone --depth 1 --branch v0.16.0 https://github.com/PixarAnimationStudios/OpenTimelineIO.git
+          cmake -S OpenTimelineIO -B OpenTimelineIO/build -G Ninja \
+            -DOTIO_SHARED_LIBS=ON \
+            -DOTIO_PYTHON_BINDINGS=OFF \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="${PWD}/otio-install"
+          cmake --build OpenTimelineIO/build
+          cmake --install OpenTimelineIO/build
+
+      - name: Configure
+        run: |
+          export PATH="$(brew --prefix qt@6)/bin:$PATH"
+          export CMAKE_PREFIX_PATH="$(brew --prefix qt@6)"
+          cmake -S . -B build -G Ninja \
+            -DBUILD_QT6=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DOTIO_LOCATION="${PWD}/otio-install" \
+            -DOCIO_LOCATION="$(brew --prefix opencolorio)"
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Deploy Qt dependencies
+        run: |
+          export PATH="$(brew --prefix qt@6)/bin:$PATH"
+          macdeployqt build/app/Olive.app
+
+      - name: Create DMG
+        run: |
+          hdiutil create \
+            -srcfolder build/app/Olive.app \
+            -volname "Oak Video Editor" \
+            -fs HFS+ \
+            -format UDZO \
+            Oak-Video-Editor-macOS.dmg
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: oak-macos-dmg
+          path: Oak-Video-Editor-macOS.dmg
+
+  # ------------------------------------------------------------------
+  # Linux AppImage (Arch Linux — latest FFmpeg)
+  # ------------------------------------------------------------------
+  appimage:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Initialize pacman
+        run: |
+          pacman-key --init
+          pacman-key --populate archlinux
+          pacman -Sy --noconfirm archlinux-keyring
+
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm \
+            base-devel cmake ninja git wget fuse2 desktop-file-utils \
+            qt6-base qt6-tools \
+            ffmpeg openimageio opencolorio openexr expat portaudio \
+            mesa libxkbcommon
+
+      - name: Build
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DBUILD_QT6=ON
+          cmake --build build
+
+      - name: Install to AppDir
+        run: |
+          DESTDIR="${PWD}"/AppDir cmake --install build
+          # Copy custom AppRun
+          cp app/packaging/linux/AppRun AppDir/
+
+      - name: Create AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: 1
+        run: |
+          wget -q "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+          wget -q "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
+          wget -q "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage appimagetool-x86_64.AppImage
+          export PATH="${PWD}:${PATH}"
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --plugin qt \
+            --desktop-file AppDir/usr/share/applications/org.oakvideoeditor.Oak.desktop \
+            --icon-file AppDir/usr/share/icons/hicolor/512x512/apps/org.oakvideoeditor.Oak.png \
+            --output appimage
+
+      - name: Verify FFmpeg is dynamically bundled
+        run: |
+          # Ensure FFmpeg shared libraries are present inside the AppDir
+          ls AppDir/usr/lib/libavcodec.so* || (echo "Missing libavcodec" && exit 1)
+          ls AppDir/usr/lib/libavformat.so* || (echo "Missing libavformat" && exit 1)
+          ls AppDir/usr/lib/libavutil.so*   || (echo "Missing libavutil" && exit 1)
+          ls AppDir/usr/lib/libswscale.so*  || (echo "Missing libswscale" && exit 1)
+          ls AppDir/usr/lib/libswresample.so* || (echo "Missing libswresample" && exit 1)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: oak-linux-appimage
+          path: Oak_Video_Editor-*.AppImage
+
+  # ------------------------------------------------------------------
+  # Create Draft Release
+  # ------------------------------------------------------------------
+  release:
+    needs: [windows, macos, appimage]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create Draft Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: artifacts/*
