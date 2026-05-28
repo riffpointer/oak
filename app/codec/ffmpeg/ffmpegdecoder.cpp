@@ -21,6 +21,23 @@
 
 #include "ffmpegdecoder.h"
 
+namespace olive {
+
+static VideoParams::Interlacing FFmpegFieldOrderToOlive(AVFieldOrder fo)
+{
+	switch (fo) {
+	case AV_FIELD_TT:
+		return VideoParams::kInterlacedTopFirst;
+	case AV_FIELD_BB:
+		return VideoParams::kInterlacedBottomFirst;
+	case AV_FIELD_PROGRESSIVE:
+	default:
+		return VideoParams::kInterlaceNone;
+	}
+}
+
+}
+
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -349,18 +366,6 @@ TexturePtr FFmpegDecoder::RetrieveVideoInternal(const RetrieveVideoParams &p)
 			return nullptr;
 		}
 
-		// Diagnostic: check if decoded frame is all black
-		bool all_black = true;
-		if (f->data[0]) {
-			int check_rows = std::min(f->height, 8);
-			int check_bytes = check_rows * f->linesize[0];
-			for (int i = 0; i < check_bytes; ++i) {
-				if (f->data[0][i] != 0) {
-					all_black = false;
-					break;
-				}
-			}
-		}
 		// Finally, perform any GPU processing required
 		TexturePtr texture = ProcessFrameIntoTexture(f, p, original);
 
@@ -454,14 +459,6 @@ FootageDescription FFmpegDecoder::Probe(const QString &filename,
 				 avstream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO ||
 				 avstream->codecpar->codec_type == AVMEDIA_TYPE_SUBTITLE)) {
 				if (avstream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
-					AVPixelFormat compatible_pix_fmt = AV_PIX_FMT_NONE;
-
-					bool image_is_still = false;
-					rational pixel_aspect_ratio;
-					rational frame_rate;
-					VideoParams::Interlacing interlacing =
-						VideoParams::kInterlaceNone;
-
 					{
 					    // Read at least two frames to get more information about this video stream
 					    AVPacket *pkt = av_packet_alloc();
