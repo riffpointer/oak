@@ -139,10 +139,6 @@ jobs:
     container:
       image: archlinux:latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-
       - name: Initialize pacman
         run: |
           pacman-key --init
@@ -155,7 +151,11 @@ jobs:
             base-devel cmake ninja git wget fuse2 desktop-file-utils \
             qt6-base qt6-tools \
             ffmpeg openimageio opencolorio openexr expat portaudio \
-            mesa libxkbcommon
+            fmt mesa libxkbcommon
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Build
         run: |
