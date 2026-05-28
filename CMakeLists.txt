@@ -210,6 +210,10 @@ list(APPEND OLIVE_LIBRARIES
   FFMPEG::swresample
 )
 
+# Static FFmpeg (e.g. our Linux CI build) needs zlib for libavcodec.
+find_package(ZLIB REQUIRED)
+list(APPEND OLIVE_LIBRARIES ZLIB::ZLIB)
+
 # Link PortAudio
 find_package(PortAudio REQUIRED)
 set(CMAKE_REQUIRED_INCLUDES ${PORTAUDIO_INCLUDE_DIRS})

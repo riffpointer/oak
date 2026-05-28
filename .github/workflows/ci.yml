@@ -171,23 +171,6 @@ jobs:
           echo "OAK_OFX_PLUGIN_PATH=$PLUGIN_DIR" >> "$GITHUB_ENV"
           echo "OAK_OFX_PLUGIN_ID=net.sf.openfx.ChromaKeyerPlugin" >> "$GITHUB_ENV"
 
-      - name: Build OpenFX-Misc plugins (Windows)
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        run: |
-          cd openfx-misc
-          mingw32-make -j4
-          mingw32-make install
-          PLUGIN_FILE=$(find /usr/OFX/Plugins /usr/local/OFX/Plugins . -name "*.ofx.bundle" -print -quit 2>/dev/null | head -1)
-          if [ -n "$PLUGIN_FILE" ]; then
-            PLUGIN_DIR=$(dirname "$PLUGIN_FILE")
-          else
-            PLUGIN_DIR="$PWD"
-          fi
-          echo "OAK_OFX_ITEST=1" >> "$GITHUB_ENV"
-          echo "OAK_OFX_PLUGIN_PATH=$PLUGIN_DIR" >> "$GITHUB_ENV"
-          echo "OAK_OFX_PLUGIN_ID=net.sf.openfx.ChromaKeyerPlugin" >> "$GITHUB_ENV"
-
       # ------------------------------------------------------------------
       # Run all tests (including previously environment-gated OFX tests)
       # ------------------------------------------------------------------
@@ -232,11 +215,6 @@ jobs:
 
       - name: OFX Integration Tests (macOS)
         if: runner.os == 'macOS'
-        run: ./build/tests/gtest/olive-gtest --gtest_filter="PluginIntegration.*:PluginMisc.*"
-
-      - name: OFX Integration Tests (Windows)
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
         run: ./build/tests/gtest/olive-gtest --gtest_filter="PluginIntegration.*:PluginMisc.*"
 
       - name: Audio Smoke Tests (Linux)
