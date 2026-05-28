@@ -2,11 +2,16 @@
 
 #include <QOpenGLContext>
 #include <QVariant>
+#include <cstdlib>
 
 #include "render/opengl/openglrenderer.h"
 
 TEST(OpenGLRenderer, DownloadFromTextureWithoutCurrentContext)
 {
+	if (std::getenv("CI")) {
+		GTEST_SKIP() << "Skipping OpenGL test in CI environment";
+	}
+
 	QOpenGLContext context;
 	ASSERT_TRUE(context.create());
 	ASSERT_EQ(QOpenGLContext::currentContext(), nullptr);

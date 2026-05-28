@@ -191,7 +191,7 @@ list(APPEND OLIVE_LIBRARIES
 list(APPEND OLIVE_LIBRARIES OfxHost)
 
 # Link FFmpeg
-find_package(FFMPEG REQUIRED
+find_package(FFMPEG 8.0 REQUIRED
   COMPONENTS
   avutil
   avcodec
@@ -210,9 +210,17 @@ list(APPEND OLIVE_LIBRARIES
   FFMPEG::swresample
 )
 
-# Static FFmpeg (e.g. our Linux CI build) needs zlib for libavcodec.
+# Static FFmpeg (e.g. our Linux CI build) needs system libs for libavcodec/libavformat.
 find_package(ZLIB REQUIRED)
 list(APPEND OLIVE_LIBRARIES ZLIB::ZLIB)
+
+find_package(BZip2 REQUIRED)
+list(APPEND OLIVE_LIBRARIES BZip2::BZip2)
+
+find_package(LibLZMA)
+if (LIBLZMA_FOUND)
+  list(APPEND OLIVE_LIBRARIES ${LIBLZMA_LIBRARIES})
+endif()
 
 # Link PortAudio
 find_package(PortAudio REQUIRED)
