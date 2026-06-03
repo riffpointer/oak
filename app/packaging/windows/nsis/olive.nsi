@@ -11,6 +11,7 @@
 SetCompressor lzma
 
 Name "${APP_NAME}"
+OutFile "setup.exe"
 
 ManifestDPIAware true
 Unicode true
