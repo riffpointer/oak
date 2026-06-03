@@ -25,7 +25,6 @@ jobs:
         with:
           msystem: UCRT64
           update: true
-          cache: true
           install: >-
             mingw-w64-ucrt-x86_64-cmake
             mingw-w64-ucrt-x86_64-ninja
@@ -129,7 +128,19 @@ jobs:
           dylibbundler -od -b \
             -x build/app/Olive.app/Contents/MacOS/Olive \
             -d build/app/Olive.app/Contents/Frameworks/ \
-            -p @executable_path/../Frameworks
+            -p @executable_path/../Frameworks \
+            -s /opt/homebrew/lib \
+            -s /usr/local/lib \
+            -s "${PWD}/otio-install/lib"
+
+      - name: Debug bundle contents
+        run: |
+          echo "=== otool -L ==="
+          otool -L build/app/Olive.app/Contents/MacOS/Olive
+          echo "=== Frameworks dir ==="
+          ls -la build/app/Olive.app/Contents/Frameworks/ || echo "(empty)"
+          echo "=== App bundle size ==="
+          du -sh build/app/Olive.app
 
       - name: Create DMG
         run: |
