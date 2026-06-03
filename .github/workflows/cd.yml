@@ -39,6 +39,7 @@ jobs:
             mingw-w64-ucrt-x86_64-expat
             mingw-w64-ucrt-x86_64-portaudio
             mingw-w64-ucrt-x86_64-nsis
+            mingw-w64-ucrt-x86_64-ntldd
 
       - name: Configure
         shell: msys2 {0}
@@ -51,12 +52,17 @@ jobs:
         shell: msys2 {0}
         run: cmake --build build --config Release
 
-      - name: Deploy Qt dependencies
+      - name: Deploy dependencies
         shell: msys2 {0}
         run: |
           mkdir -p app/packaging/windows/nsis/olive-editor
           cp build/app/olive-editor.exe app/packaging/windows/nsis/olive-editor/
           windeployqt6 app/packaging/windows/nsis/olive-editor/olive-editor.exe
+          # Copy all non-Qt MSYS2 DLLs recursively
+          cd app/packaging/windows/nsis/olive-editor
+          for l in $(ntldd -R olive-editor.exe | grep -E 'mingw64|ucrt64|clang64' | sed 's/^[ \t]*//' | cut -d' ' -f3); do
+            cp -v "$l" .
+          done
 
       - name: Build installer
         shell: msys2 {0}
@@ -85,7 +91,7 @@ jobs:
       - name: Install dependencies
         run: |
           brew update
-          brew install cmake ninja pkg-config qt@6 ffmpeg openimageio opencolorio openexr portaudio expat
+          brew install cmake ninja pkg-config qt@6 ffmpeg openimageio opencolorio openexr portaudio expat dylibbundler
 
       - name: Build OpenTimelineIO
         run: |
@@ -115,6 +121,14 @@ jobs:
         run: |
           export PATH="$(brew --prefix qt@6)/bin:$PATH"
           macdeployqt build/app/Olive.app
+
+      - name: Bundle non-Qt libraries
+        run: |
+          mkdir -p build/app/Olive.app/Contents/Frameworks
+          dylibbundler -od -b \
+            -x build/app/Olive.app/Contents/MacOS/Olive \
+            -d build/app/Olive.app/Contents/Frameworks/ \
+            -p @executable_path/../Frameworks
 
       - name: Create DMG
         run: |
@@ -182,14 +196,20 @@ jobs:
             --icon-file AppDir/usr/share/icons/hicolor/512x512/apps/org.oakvideoeditor.Oak.png \
             --output appimage
 
-      - name: Verify FFmpeg is dynamically bundled
+      - name: Verify bundled libraries
         run: |
           # Ensure FFmpeg shared libraries are present inside the AppDir
-          ls AppDir/usr/lib/libavcodec.so* || (echo "Missing libavcodec" && exit 1)
-          ls AppDir/usr/lib/libavformat.so* || (echo "Missing libavformat" && exit 1)
-          ls AppDir/usr/lib/libavutil.so*   || (echo "Missing libavutil" && exit 1)
-          ls AppDir/usr/lib/libswscale.so*  || (echo "Missing libswscale" && exit 1)
+          ls AppDir/usr/lib/libavcodec.so*    || (echo "Missing libavcodec" && exit 1)
+          ls AppDir/usr/lib/libavformat.so*   || (echo "Missing libavformat" && exit 1)
+          ls AppDir/usr/lib/libavutil.so*     || (echo "Missing libavutil" && exit 1)
+          ls AppDir/usr/lib/libswscale.so*    || (echo "Missing libswscale" && exit 1)
           ls AppDir/usr/lib/libswresample.so* || (echo "Missing libswresample" && exit 1)
+          # Ensure other runtime dependencies are present
+          ls AppDir/usr/lib/libOpenImageIO.so*    || (echo "Missing libOpenImageIO" && exit 1)
+          ls AppDir/usr/lib/libOpenColorIO.so*    || (echo "Missing libOpenColorIO" && exit 1)
+          ls AppDir/usr/lib/libportaudio.so*      || (echo "Missing libportaudio" && exit 1)
+          ls AppDir/usr/lib/libopenexr*.so*       || (echo "Missing libopenexr" && exit 1)
+          ls AppDir/usr/lib/libopentimelineio.so* || (echo "Missing libopentimelineio" && exit 1)
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
