@@ -195,6 +195,12 @@ jobs:
                       continue
                   PROCESSED.add(base)
                   dst = os.path.join(DEST, base)
+                  if os.path.abspath(resolved) == os.path.abspath(dst):
+                      # Already in Frameworks (likely copied by macdeployqt), just fix paths
+                      subprocess.run(["install_name_tool", "-id", f"@rpath/{base}", dst], capture_output=True)
+                      subprocess.run(["install_name_tool", "-change", dep, f"@rpath/{base}", target], capture_output=True)
+                      process(dst)
+                      continue
                   print(f"  Copying: {resolved} -> {dst}")
                   shutil.copy2(resolved, dst)
                   subprocess.run(["install_name_tool", "-id", f"@rpath/{base}", dst], capture_output=True)
