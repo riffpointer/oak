@@ -21,7 +21,6 @@
 
 #include "viewerplaybacktimer.h"
 
-#include <QDateTime>
 #include <QtMath>
 
 namespace olive
@@ -31,7 +30,7 @@ void ViewerPlaybackTimer::Start(const int64_t &start_timestamp,
 								const int &playback_speed,
 								const double &timebase)
 {
-	start_msec_ = QDateTime::currentMSecsSinceEpoch();
+	timer_.start();
 	start_timestamp_ = start_timestamp;
 	playback_speed_ = playback_speed;
 	timebase_ = timebase * 1000;
@@ -39,7 +38,7 @@ void ViewerPlaybackTimer::Start(const int64_t &start_timestamp,
 
 int64_t ViewerPlaybackTimer::GetTimestampNow() const
 {
-	int64_t real_time = QDateTime::currentMSecsSinceEpoch() - start_msec_;
+	int64_t real_time = timer_.elapsed();
 
 	int64_t frames_since_start =
 		qFloor(static_cast<double>(real_time) / (timebase_));

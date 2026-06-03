@@ -23,6 +23,7 @@
 #define VIEWERPLAYBACKTIMER_H
 
 #include <QtGlobal>
+#include <QElapsedTimer>
 
 #include "common/define.h"
 
@@ -37,7 +38,7 @@ public:
 	int64_t GetTimestampNow() const;
 
 private:
-	qint64 start_msec_;
+	QElapsedTimer timer_;
 	int64_t start_timestamp_;
 
 	int playback_speed_;
