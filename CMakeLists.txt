@@ -210,6 +210,33 @@ list(APPEND OLIVE_LIBRARIES
   FFMPEG::swresample
 )
 
+# Detect FFmpeg pixel formats that may not exist in all versions
+include(CheckCXXSourceCompiles)
+set(CMAKE_REQUIRED_INCLUDES ${FFMPEG_INCLUDE_DIRS})
+check_cxx_source_compiles("
+#include <libavutil/pixfmt.h>
+int main() { AVPixelFormat f = AV_PIX_FMT_GRAYF16; (void)f; return 0; }
+" HAVE_AV_PIX_FMT_GRAYF16)
+check_cxx_source_compiles("
+#include <libavutil/pixfmt.h>
+int main() { AVPixelFormat f = AV_PIX_FMT_RGBF16; (void)f; return 0; }
+" HAVE_AV_PIX_FMT_RGBF16)
+check_cxx_source_compiles("
+#include <libavutil/pixfmt.h>
+int main() { AVPixelFormat f = AV_PIX_FMT_RGBAF16; (void)f; return 0; }
+" HAVE_AV_PIX_FMT_RGBAF16)
+unset(CMAKE_REQUIRED_INCLUDES)
+
+if(HAVE_AV_PIX_FMT_GRAYF16)
+  add_compile_definitions(HAVE_AV_PIX_FMT_GRAYF16)
+endif()
+if(HAVE_AV_PIX_FMT_RGBF16)
+  add_compile_definitions(HAVE_AV_PIX_FMT_RGBF16)
+endif()
+if(HAVE_AV_PIX_FMT_RGBAF16)
+  add_compile_definitions(HAVE_AV_PIX_FMT_RGBAF16)
+endif()
+
 # Static FFmpeg (e.g. our Linux CI build) needs system libs for libavcodec/libavformat.
 find_package(ZLIB REQUIRED)
 list(APPEND OLIVE_LIBRARIES ZLIB::ZLIB)

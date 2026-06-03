@@ -215,7 +215,12 @@ bool ShouldSkipTest() {
 	
 	static bool plugins_loaded = false;
 	if (!plugins_loaded) {
-		loadPlugins(QString::fromUtf8(path));
+		QString raw = QString::fromUtf8(path);
+		const QChar separator = QDir::listSeparator();
+		const QStringList paths = raw.split(separator, Qt::SkipEmptyParts);
+		for (const QString &p : paths) {
+			loadPlugins(p);
+		}
 		plugins_loaded = true;
 	}
 	

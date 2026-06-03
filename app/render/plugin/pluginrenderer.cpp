@@ -93,7 +93,11 @@ static AVPixelFormat GetOfxAVPixelFormat(const OFX::Host::ImageEffect::Image &im
 		} else if (pixel_format == olive::core::PixelFormat::U16) {
 			pix_fmt = AV_PIX_FMT_GRAY16LE;
 		} else if (pixel_format == olive::core::PixelFormat::F16) {
+#ifdef HAVE_AV_PIX_FMT_GRAYF16
 			pix_fmt = AV_PIX_FMT_GRAYF16;
+#else
+			pix_fmt = AV_PIX_FMT_GRAY16LE;
+#endif
 		} else if (pixel_format == olive::core::PixelFormat::F32) {
 			pix_fmt = AV_PIX_FMT_GRAYF32;
 		}
@@ -871,7 +875,11 @@ static AVPixelFormat GetDestinationAVPixelFormat(const olive::VideoParams &param
 		} else if (params.format() == olive::core::PixelFormat::U16) {
 			pix_fmt = AV_PIX_FMT_GRAY16LE;
 		} else if (params.format() == olive::core::PixelFormat::F16) {
+#ifdef HAVE_AV_PIX_FMT_GRAYF16
 			pix_fmt = AV_PIX_FMT_GRAYF16;
+#else
+			pix_fmt = AV_PIX_FMT_GRAY16LE;
+#endif
 		} else if (params.format() == olive::core::PixelFormat::F32) {
 			pix_fmt = AV_PIX_FMT_GRAYF32;
 		}

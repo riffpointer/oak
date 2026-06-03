@@ -65,7 +65,12 @@ TEST(PluginIntegration, ChromaKeyerCreateAndRender)
 		}
 	}
 
-	olive::plugin::loadPlugins(QString::fromUtf8(path));
+	QString raw = QString::fromUtf8(path);
+	const QChar separator = QDir::listSeparator();
+	const QStringList paths = raw.split(separator, Qt::SkipEmptyParts);
+	for (const QString &p : paths) {
+		olive::plugin::loadPlugins(p);
+	}
 
 	auto *cache = OFX::Host::PluginCache::getPluginCache();
 	OFX::Host::Plugin *found = nullptr;
