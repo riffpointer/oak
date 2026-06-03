@@ -83,5 +83,5 @@ Section "uninstall"
 SectionEnd
 
 Function LaunchOak
-    ShellExecAsUser::ShellExecAsUser "" "$INSTDIR\${APP_TARGET}.exe"
+    ExecShell "" "$INSTDIR\${APP_TARGET}.exe"
 FunctionEnd
