@@ -138,7 +138,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cd openfx-misc
-          make -j4
+          make -j16
           sudo make install
           PLUGIN_FILE=$(find /usr/OFX/Plugins /usr/local/OFX/Plugins . -name "*.ofx.bundle" -print -quit 2>/dev/null | head -1)
           if [ -n "$PLUGIN_FILE" ]; then
