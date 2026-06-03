@@ -121,17 +121,97 @@ jobs:
         run: |
           export PATH="$(brew --prefix qt@6)/bin:$PATH"
           macdeployqt build/app/Olive.app
+          # Re-sign after macdeployqt (it breaks signatures when modifying libs)
+          codesign --force --deep --sign - build/app/Olive.app
 
       - name: Bundle non-Qt libraries
         run: |
           mkdir -p build/app/Olive.app/Contents/Frameworks
-          dylibbundler -od -b \
-            -x build/app/Olive.app/Contents/MacOS/Olive \
-            -d build/app/Olive.app/Contents/Frameworks/ \
-            -p @executable_path/../Frameworks \
-            -s /opt/homebrew/lib \
-            -s /usr/local/lib \
-            -s "${PWD}/otio-install/lib"
+          python3 << 'PYEOF'
+          import os, shutil, subprocess
+
+          APP = "build/app/Olive.app"
+          BINARY = f"{APP}/Contents/MacOS/Olive"
+          DEST = f"{APP}/Contents/Frameworks"
+          os.makedirs(DEST, exist_ok=True)
+
+          def get_rpaths(binary):
+              out = subprocess.run(["otool", "-l", binary], capture_output=True, text=True).stdout
+              rpaths = []
+              for i, line in enumerate(out.splitlines()):
+                  if "cmd LC_RPATH" in line and i + 2 < len(out.splitlines()):
+                      parts = out.splitlines()[i + 2].strip().split()
+                      if len(parts) >= 2:
+                          rpaths.append(parts[1])
+              return rpaths
+
+          def get_deps(binary):
+              out = subprocess.run(["otool", "-L", binary], capture_output=True, text=True).stdout
+              deps = []
+              for line in out.splitlines()[1:]:
+                  line = line.strip()
+                  if not line:
+                      continue
+                  dep = line.split()[0]
+                  if dep.startswith("/usr/lib/") or dep.startswith("/System/"):
+                      continue
+                  deps.append(dep)
+              return deps
+
+          def resolve(ref, rpaths, loader_dir=""):
+              if ref.startswith("/"):
+                  return ref if os.path.isfile(ref) else None
+              if ref.startswith("@rpath/"):
+                  for rp in rpaths:
+                      p = os.path.join(rp, ref[7:])
+                      if os.path.isfile(p):
+                          return p
+              if ref.startswith("@loader_path/") and loader_dir:
+                  p = os.path.join(loader_dir, ref[13:])
+                  if os.path.isfile(p):
+                      return p
+              if ref.startswith("@executable_path/"):
+                  p = os.path.join(APP, "Contents/MacOS", ref[17:])
+                  if os.path.isfile(p):
+                      return p
+              return None
+
+          EXEC_RPATHS = get_rpaths(BINARY)
+          PROCESSED = set()
+
+          def process(target):
+              tdir = os.path.dirname(target)
+              print(f"Processing: {target}")
+              for dep in get_deps(target):
+                  resolved = resolve(dep, EXEC_RPATHS if target == BINARY else [], tdir)
+                  if not resolved or not os.path.isfile(resolved):
+                      continue
+                  resolved = os.path.realpath(resolved)
+                  if not (resolved.startswith("/opt/homebrew/") or resolved.startswith("/usr/local/") or resolved.startswith(os.path.realpath(os.getcwd()))):
+                      continue
+                  base = os.path.basename(resolved)
+                  if base in PROCESSED:
+                      subprocess.run(["install_name_tool", "-change", dep, f"@rpath/{base}", target], capture_output=True)
+                      continue
+                  PROCESSED.add(base)
+                  dst = os.path.join(DEST, base)
+                  print(f"  Copying: {resolved} -> {dst}")
+                  shutil.copy2(resolved, dst)
+                  subprocess.run(["install_name_tool", "-id", f"@rpath/{base}", dst], capture_output=True)
+                  subprocess.run(["install_name_tool", "-change", dep, f"@rpath/{base}", target], capture_output=True)
+                  process(dst)
+
+          process(BINARY)
+
+          for rp in EXEC_RPATHS:
+              subprocess.run(["install_name_tool", "-delete_rpath", rp, BINARY], capture_output=True)
+          subprocess.run(["install_name_tool", "-add_rpath", "@executable_path/../Frameworks", BINARY], capture_output=True)
+
+          subprocess.run(["codesign", "--force", "--deep", "--sign", "-", APP], check=True)
+          print("Done. Frameworks:")
+          for f in sorted(os.listdir(DEST)):
+              print(f"  {f}")
+          PYEOF
 
       - name: Debug bundle contents
         run: |
