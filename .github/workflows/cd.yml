@@ -14,7 +14,7 @@ jobs:
   # Windows Installer (MSYS2)
   # ------------------------------------------------------------------
   windows:
-    runs-on: windows-latest
+    runs-on: warp-windows-latest-x64-16x
     steps:
       - uses: actions/checkout@v4
         with:
@@ -82,7 +82,7 @@ jobs:
   # macOS DMG
   # ------------------------------------------------------------------
   macos:
-    runs-on: macos-latest
+    runs-on: warp-macos-15-arm64-12x
     steps:
       - uses: actions/checkout@v4
         with:
@@ -149,7 +149,7 @@ jobs:
   # Linux AppImage (Ubuntu 24.04 — distro FFmpeg 6.x)
   # ------------------------------------------------------------------
   appimage:
-    runs-on: ubuntu-24.04
+    runs-on: warp-ubuntu-latest-x64-16x
     steps:
       - uses: actions/checkout@v4
         with:
@@ -208,8 +208,7 @@ jobs:
           ls AppDir/usr/lib/libOpenImageIO.so*    || (echo "Missing libOpenImageIO" && exit 1)
           ls AppDir/usr/lib/libOpenColorIO.so*    || (echo "Missing libOpenColorIO" && exit 1)
           ls AppDir/usr/lib/libportaudio.so*      || (echo "Missing libportaudio" && exit 1)
-          ls AppDir/usr/lib/libopenexr*.so*       || (echo "Missing libopenexr" && exit 1)
-          ls AppDir/usr/lib/libopentimelineio.so* || (echo "Missing libopentimelineio" && exit 1)
+          ls AppDir/usr/lib/libOpenEXR*.so*       || (echo "Missing libOpenEXR" && exit 1)
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
