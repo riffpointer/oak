@@ -180,15 +180,26 @@ compact `QJsonObject`，`\n` 结尾。仅承载低频控制流量（握手、提
   `frame_ready`；输出 slot 元数据为 `id=1001, 64x64, fmt=3, channels=4, bytes=65536`，
   前 4KB 像素存在非零数据。
 
-### 阶段 3：主进程 WorkerPool + 调度器接线
+### 阶段 3：主进程 WorkerPool + 调度器接线（单 worker MVP 已接入）
 
-- 新增 `app/render/renderworkerpool.{h,cpp}`：
-  - `QProcess` 启动 N 个 `olive-render-worker`，建立各自 SHM 段 + stdio 管道。
-  - 维护 worker 忙闲状态，按最少负载派发。
-  - `SubmitFrame(RenderTicketPtr)`：编码 `render_frame` 派发 → worker 回 `frame_ready` 后从输出 slot 拷出 `FramePtr` → `ticket->Finish(...)`。**对上层透明**，`RenderTicketWatcher`/`Viewer` 无感知。
-- `RenderManager` 增加 `kMultiProcess` backend 分支（与 `kOpenGL` 并存），多进程模式下 `RenderFrame()` 走 `RenderWorkerPool`。
-- config 开关控制启用，默认仍走进程内 `kOpenGL`。
-- 验证：开关打开后 Viewer 正常播放纯生成内容；关掉回退旧路径无差异。
+- ✅ 新增 `app/render/renderworkerpool.{h,cpp}`：
+  - 当前 MVP 用后台 `QThread` 持有任务队列，每个任务启动 1 个 `olive-render-worker`，
+    建立输出 SHM 段 + stdio 管道。
+  - `SubmitFrame(RenderTicketPtr, RenderVideoParams)`：写全量图快照临时文件 →
+    发送 `handshake` / `load_graph` / `render_frame` → worker 回 `frame_ready` 后从输出 slot
+    拷出 `FramePtr` → `ticket->Finish(...)`。对上层 `RenderTicketWatcher`/`Viewer` 保持透明。
+  - 当前仅支持普通视频 `ReturnType::kFrame`；素材输入仍按阶段 4 处理，失败或不支持时回退旧路径。
+- ✅ `RenderManager` 增加 `kMultiProcess` backend 分支（与 `kOpenGL` 并存），开关开启且
+  WorkerPool 接受任务时 `RenderFrame()` 走 `RenderWorkerPool`。
+- ✅ `Config` 增加 `RenderProcessIsolationEnabled`，默认 `false`，默认仍走进程内 `kOpenGL`。
+- 待补：常驻 N worker、忙闲/负载派发、崩溃重启与重派、Viewer 开关实测。
+
+**验证结果**：
+- `cmake --build build --target olive-render-worker olive-editor -j22` 通过。
+- `QT_QPA_PLATFORM=offscreen build/tests/gtest/olive-gtest --gtest_filter='SpscRingBuffer*:*FrameSlotPool*:*IpcMessage*:*ProjectSerializer*' --gtest_brief=1`
+  通过，11 个测试全部通过。
+- 非沙箱环境 `printf '{"type":"shutdown"}\n' | build/app/olive-render-worker` 通过，输出合法
+  handshake。
 
 ### 阶段 4：素材输入解耦（关键重构）
 
@@ -224,7 +235,7 @@ compact `QJsonObject`，`\n` 结尾。仅承载低频控制流量（握手、提
 | `app/render/ipc/CMakeLists.txt` | 0 | ✅ |
 | `tests/gtest/render_ipc_test.cpp` | 0 | ✅ |
 | `app/render/worker/workermain.cpp` | 1/2 | ✅ 基础主循环 |
-| `app/render/renderworkerpool.{h,cpp}` | 3 | 待办 |
+| `app/render/renderworkerpool.{h,cpp}` | 3 | ✅ 单 worker MVP |
 
 **修改**
 
@@ -234,9 +245,9 @@ compact `QJsonObject`，`\n` 结尾。仅承载低频控制流量（握手、提
 | `tests/gtest/CMakeLists.txt`（注册 ipc 测试） | 0 | ✅ |
 | `app/CMakeLists.txt`（新增 `olive-render-worker` target） | 1 | ✅ |
 | `app/node/project/serializer/serializer*.{h,cpp}`（暴露加载映射供 worker 查节点） | 2 | ✅ |
-| `app/render/rendermanager.{h,cpp}`（`kMultiProcess` 分支 + WorkerPool 接线） | 3 | 待办 |
+| `app/render/rendermanager.{h,cpp}`（`kMultiProcess` 分支 + WorkerPool 接线） | 3 | ✅ 单 worker MVP |
 | `app/render/renderprocessor.cpp`（`ProcessVideoFootage` 改取输入 slot） | 4 | 待办 |
-| `app/config/config.h`（多进程开关） | 3 | 待办 |
+| `app/config/config.cpp`（多进程开关默认值） | 3 | ✅ 默认关闭 |
 
 ---
 

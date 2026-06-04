@@ -29,6 +29,7 @@
 #include "core.h"
 #include "render/opengl/openglrenderer.h"
 #include "renderprocessor.h"
+#include "renderworkerpool.h"
 #include "task/conform/conform.h"
 #include "task/taskmanager.h"
 #include "window/mainwindow/mainwindow.h"
@@ -42,6 +43,7 @@ const rational RenderManager::kDryRunInterval = rational(10);
 RenderManager::RenderManager(QObject *parent)
 	: backend_(kOpenGL)
 	, aggressive_gc_(0)
+	, worker_pool_(nullptr)
 {
 	if (backend_ == kOpenGL) {
 		context_ = new OpenGLRenderer();
@@ -64,6 +66,12 @@ RenderManager::RenderManager(QObject *parent)
 		}
 
 		auto_cacher_ = new PreviewAutoCacher(this);
+
+		if (OLIVE_CONFIG("RenderProcessIsolationEnabled").toBool()) {
+			worker_pool_ = new RenderWorkerPool(this);
+			worker_pool_->start(QThread::NormalPriority);
+			backend_ = kMultiProcess;
+		}
 	}
 
 	decoder_clear_timer_ = new QTimer(this);
@@ -76,6 +84,12 @@ RenderManager::RenderManager(QObject *parent)
 RenderManager::~RenderManager()
 {
 	if (context_) {
+		if (worker_pool_) {
+			worker_pool_->Shutdown();
+			delete worker_pool_;
+			worker_pool_ = nullptr;
+		}
+
 		delete shader_cache_;
 		delete decoder_cache_;
 
@@ -125,6 +139,11 @@ RenderTicketPtr RenderManager::RenderFrame(const RenderVideoParams &params)
 						QVariant::fromValue(params.cache_timebase));
 	ticket->setProperty("cacheid", QVariant::fromValue(params.cache_id));
 	ticket->setProperty("multicam", QtUtils::PtrToValue(params.multicam));
+
+	if (worker_pool_ && params.return_type == ReturnType::kFrame &&
+		worker_pool_->SubmitFrame(ticket, params)) {
+		return ticket;
+	}
 
 	if (params.return_type == ReturnType::kNull) {
 		dry_run_thread_->AddTicket(ticket);

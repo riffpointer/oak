@@ -69,12 +69,17 @@ private:
 	ShaderCache *shader_cache_;
 };
 
+class RenderWorkerPool;
+
 class RenderManager : public QObject {
 	Q_OBJECT
 public:
 	enum Backend {
 		/// Graphics acceleration provided by OpenGL
 		kOpenGL,
+
+		/// Video frames are rendered by an external olive-render-worker process.
+		kMultiProcess,
 
 		/// No graphics rendering - used to test core threading logic
 		kDummy
@@ -245,6 +250,8 @@ private:
 	std::list<RenderThread *> render_threads_;
 
 	PreviewAutoCacher *auto_cacher_;
+
+	RenderWorkerPool *worker_pool_;
 
 private slots:
 	void ClearOldDecoders();

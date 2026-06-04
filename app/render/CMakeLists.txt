@@ -54,6 +54,8 @@ set(OLIVE_SOURCES
   render/renderjobtracker.h
   render/rendermanager.cpp
   render/rendermanager.h
+  render/renderworkerpool.cpp
+  render/renderworkerpool.h
   render/rendermodes.h
   render/renderprocessor.cpp
   render/renderprocessor.h
