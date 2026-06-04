@@ -47,6 +47,7 @@ ProjectSerializer230220::Load(Project *project, QXmlStreamReader *reader,
 			while (XMLReadNextStartElement(reader)) {
 				if (reader->name() == QStringLiteral("project")) {
 					project_data = project->Load(reader);
+					load_data.node_ptrs = project_data.node_ptrs;
 				} else if (reader->name() == QStringLiteral("layout")) {
 					load_data.layout = MainWindowLayoutInfo::fromXml(
 						reader, project_data.node_ptrs);
@@ -294,6 +295,8 @@ ProjectSerializer230220::Load(Project *project, QXmlStreamReader *reader,
 							}
 						}
 					}
+
+					load_data.node_ptrs = project_data.node_ptrs;
 				} else if (reader->name() == QStringLiteral("properties")) {
 					while (XMLReadNextStartElement(reader)) {
 						if (reader->name() == QStringLiteral("node")) {

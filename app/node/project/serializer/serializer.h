@@ -83,6 +83,10 @@ public:
 
 		QVector<Node *> nodes;
 
+		QHash<quintptr, Node *> node_ptrs;
+
+		QHash<Node *, QUuid> node_uuids;
+
 		Node::OutputConnections promised_connections;
 	};
 

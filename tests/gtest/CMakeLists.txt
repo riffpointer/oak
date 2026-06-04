@@ -12,6 +12,7 @@ add_executable(olive-gtest
   render_audioparams_branch_test.cpp
   render_sampleformat_test.cpp
   render_pixelformat_test.cpp
+  render_ipc_test.cpp
   project_serializer_test.cpp
   timeline_marker_test.cpp
   undo_stack_test.cpp

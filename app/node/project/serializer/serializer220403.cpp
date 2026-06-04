@@ -383,6 +383,9 @@ ProjectSerializer220403::Load(Project *project, QXmlStreamReader *reader,
 	// Make connections
 	PostConnect(xml_node_data);
 
+	load_data.node_ptrs = xml_node_data.node_ptrs;
+	load_data.node_uuids = xml_node_data.node_uuids;
+
 	// Resolve serialized properties (if any)
 	for (auto it = properties.cbegin(); it != properties.cend(); it++) {
 		Node *node = xml_node_data.node_ptrs.value(it.key());

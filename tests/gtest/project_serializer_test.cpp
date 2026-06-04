@@ -50,6 +50,10 @@ TEST(ProjectSerializer, SaveLoadProjectRoundTrip)
 			olive::ProjectSerializer::kProject);
 	EXPECT_EQ(result.code(), olive::ProjectSerializer::kSuccess);
 	EXPECT_FALSE(loaded_project.nodes().isEmpty());
+	ASSERT_TRUE(result.GetLoadData().node_ptrs.contains(
+		reinterpret_cast<quintptr>(node)));
+	EXPECT_TRUE(loaded_project.nodes().contains(
+		result.GetLoadData().node_ptrs.value(reinterpret_cast<quintptr>(node))));
 
 	olive::ProjectSerializer::Destroy();
 	if (created_disk_manager) {

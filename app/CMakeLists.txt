@@ -95,6 +95,19 @@ add_executable(olive-editor
 )
 target_include_directories(olive-editor PUBLIC pluginSupport)
 target_link_libraries(olive-editor PUBLIC OfxHost)
+
+# Add render worker process (olive-render-worker).
+# Reuses the libolive-editor object library so the worker shares the exact same render/node/codec
+# code as the editor. It is a headless app that owns its own offscreen GL context. The link set is
+# currently the full OLIVE_LIBRARIES for simplicity; trimming UI-only dependencies is a later-phase
+# cleanup (see render-process-isolation plan).
+add_executable(olive-render-worker
+  render/worker/workermain.cpp
+  $<TARGET_OBJECTS:libolive-editor>
+  $<TARGET_OBJECTS:olive-version-obj>
+)
+target_include_directories(olive-render-worker PUBLIC pluginSupport)
+target_link_libraries(olive-render-worker PUBLIC OfxHost)
 # Create docs if doxygen was found
 if(DOXYGEN_FOUND)
   set(DOXYGEN_PROJECT_NAME "Oak Video Editor")
@@ -139,18 +152,27 @@ endif()
 # Set link libraries
 target_link_libraries(olive-editor PRIVATE ${OLIVE_LIBRARIES})
 target_link_libraries(libolive-editor PRIVATE ${OLIVE_LIBRARIES})
+target_link_libraries(olive-render-worker PRIVATE ${OLIVE_LIBRARIES})
 
 # Set compile options
 target_compile_options(olive-editor PRIVATE ${OLIVE_COMPILE_OPTIONS})
 target_compile_options(libolive-editor PRIVATE ${OLIVE_COMPILE_OPTIONS})
+target_compile_options(olive-render-worker PRIVATE ${OLIVE_COMPILE_OPTIONS})
 
 # Set global definitions
 target_compile_definitions(olive-editor PRIVATE ${OLIVE_DEFINITIONS})
 target_compile_definitions(libolive-editor PRIVATE ${OLIVE_DEFINITIONS})
+target_compile_definitions(olive-render-worker PRIVATE ${OLIVE_DEFINITIONS})
 
 # Set include dirs
 target_include_directories(olive-editor PRIVATE ${OLIVE_INCLUDE_DIRS})
 target_include_directories(libolive-editor PRIVATE ${OLIVE_INCLUDE_DIRS})
+target_include_directories(olive-render-worker PRIVATE ${OLIVE_INCLUDE_DIRS})
+
+# Install the render worker alongside the editor on Linux.
+if (UNIX AND NOT APPLE)
+  install(TARGETS olive-render-worker RUNTIME DESTINATION bin)
+endif()
 
 # Add crash handler
 if (GoogleCrashpad_FOUND AND Qt${QT_VERSION_MAJOR}Network_FOUND)

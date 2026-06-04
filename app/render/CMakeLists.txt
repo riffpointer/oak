@@ -16,6 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 add_subdirectory(job)
+add_subdirectory(ipc)
 add_subdirectory(ocioconf)
 add_subdirectory(opengl)
 add_subdirectory(plugin)
