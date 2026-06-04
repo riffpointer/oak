@@ -32,6 +32,7 @@ extern "C" {
 #include <QWaitCondition>
 #include <stdint.h>
 
+ #include "codec/frame.h"
 #include "node/block/block.h"
 #include "node/project/footage/footagedescription.h"
 #include "render/cancelatom.h"
@@ -181,6 +182,14 @@ public:
    */
 	TexturePtr RetrieveVideo(const RetrieveVideoParams &p);
 
+	/**
+   * @brief Retrieves a decoded video frame in CPU memory.
+   *
+   * Used by render-process isolation to decode media in the main process and pass packed pixel
+   * data to workers through shared memory.
+   */
+	FramePtr RetrieveVideoFrame(const RetrieveVideoParams &p);
+
 	enum RetrieveAudioStatus {
 		kInvalid = -1,
 		kOK,
@@ -282,6 +291,8 @@ protected:
    * so sub-classes don't need to worry about thread safety.
    */
 	virtual TexturePtr RetrieveVideoInternal(const RetrieveVideoParams &p);
+
+	virtual FramePtr RetrieveVideoFrameInternal(const RetrieveVideoParams &p);
 
 	virtual bool ConformAudioInternal(const QVector<QString> &filenames,
 									  const AudioParams &params,

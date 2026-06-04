@@ -203,10 +203,11 @@ compact `QJsonObject`，`\n` 结尾。仅承载低频控制流量（握手、提
 
 ### 阶段 4：素材输入解耦（关键重构）
 
-- `RenderProcessor::ProcessVideoFootage()`（`renderprocessor.cpp:397`）当前经 `ResolveDecoderFromInput` + `DecoderCache` 解码。worker 不链接 FFmpeg，需改为从输入 slot 取已解码帧上传纹理。
-- 主进程侧 `RenderWorkerPool` 派发前用 `DecoderCache` 解出所需原始帧写入输入 slot，索引随 `render_frame` 一起发。
-- 先支持单素材片段，再扩展到多层/转场。
-- 验证：渲染含真实素材的时间线帧，与单进程结果逐像素一致。
+- ✅ `Decoder` 增加 CPU 帧接口 `RetrieveVideoFrame()`；FFmpeg 路径输出 packed RGBA CPU frame，OIIO 路径返回 still frame CPU buffer。
+- ✅ `RenderWorkerPool` 派发前 dry-run 遍历当前帧素材输入，使用主进程 `DecoderCache` 预解码，成功后写入 main→worker 输入 `FrameSlotPool`。
+- ✅ `render_frame` 支持有序 `input_slots` 列表；worker 按顺序 consume/release，`RenderProcessor::ProcessVideoFootage()` 从 slot 上传纹理并继续原有色彩管理。
+- ✅ 没有输入 slot 且 worker 无 `DecoderCache` 时，素材节点安全跳过，不再空指针崩溃。
+- 待补：真实素材项目端到端像素一致性验证；复杂多层/转场/重复素材场景下输入 slot 顺序回归；CPU 预解码失败时的更细粒度回退策略。
 
 ### 阶段 5：多 worker、取消、健壮性
 
@@ -246,7 +247,9 @@ compact `QJsonObject`，`\n` 结尾。仅承载低频控制流量（握手、提
 | `app/CMakeLists.txt`（新增 `olive-render-worker` target） | 1 | ✅ |
 | `app/node/project/serializer/serializer*.{h,cpp}`（暴露加载映射供 worker 查节点） | 2 | ✅ |
 | `app/render/rendermanager.{h,cpp}`（`kMultiProcess` 分支 + WorkerPool 接线） | 3 | ✅ 单 worker MVP |
-| `app/render/renderprocessor.cpp`（`ProcessVideoFootage` 改取输入 slot） | 4 | 待办 |
+| `app/codec/decoder.{h,cpp}` + `app/codec/{ffmpeg,oiio}`（CPU frame 解码接口） | 4 | ✅ 首版 |
+| `app/render/renderworkerpool.{h,cpp}`（主进程预解码并填 input slot） | 4 | ✅ 首版 |
+| `app/render/renderprocessor.cpp`（`ProcessVideoFootage` 改取输入 slot） | 4 | ✅ 首版 |
 | `app/config/config.cpp`（多进程开关默认值） | 3 | ✅ 默认关闭 |
 
 ---

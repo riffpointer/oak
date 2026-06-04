@@ -107,9 +107,11 @@ public:
 		olive::ipc::HandshakeMsg hs;
 		hs.protocol_version = kProtocolVersion;
 		hs.shm_key = QString();
+		hs.input_shm_key = QString();
 		hs.input_slots = 0;
 		hs.output_slots = 0;
 		hs.slot_data_bytes = 0;
+		hs.input_slot_data_bytes = 0;
 
 		QJsonObject handshake = hs.ToJson();
 		if (QOpenGLContext *ctx = renderer_->context()) {
@@ -200,6 +202,29 @@ private:
 			return Write(ErrorMessage(QStringLiteral("shared memory does not contain a frame slot pool")));
 		}
 
+		input_pool_.reset();
+		input_region_.Close();
+		if (hs.input_slots > 0) {
+			if (hs.input_shm_key.isEmpty() || hs.input_slot_data_bytes <= 0) {
+				return Write(ErrorMessage(QStringLiteral("handshake missing input shared-memory geometry")));
+			}
+
+			const size_t input_bytes = olive::ipc::FrameSlotPool::BytesNeeded(
+				uint32_t(hs.input_slots), size_t(hs.input_slot_data_bytes));
+			if (!input_region_.Open(hs.input_shm_key, input_bytes,
+									olive::ipc::SharedMemoryRegion::kAttach)) {
+				return Write(ErrorMessage(QStringLiteral("failed to attach input shared memory: %1")
+											  .arg(input_region_.error())));
+			}
+
+			input_pool_ = olive::ipc::FrameSlotPool::Attach(input_region_.data());
+			if (!input_pool_->IsValid()) {
+				input_region_.Close();
+				input_pool_.reset();
+				return Write(ErrorMessage(QStringLiteral("input shared memory does not contain a frame slot pool")));
+			}
+		}
+
 		return true;
 	}
 
@@ -265,6 +290,38 @@ private:
 									  message.ticket_id));
 		}
 
+		QVector<int> input_slots;
+		const QVector<int> requested_input_slots =
+			message.input_slots.isEmpty() && message.input_slot >= 0
+				? QVector<int>{message.input_slot}
+				: message.input_slots;
+		if (!requested_input_slots.isEmpty()) {
+			if (!input_pool_ || !input_pool_->IsValid()) {
+				return Write(ErrorMessage(QStringLiteral("render_frame referenced input slot without input pool"),
+										  message.ticket_id));
+			}
+
+			for (int requested_slot : requested_input_slots) {
+				uint32_t consumed_slot = 0;
+				if (!input_pool_->Consume(&consumed_slot)) {
+					for (int slot : input_slots) {
+						input_pool_->Release(uint32_t(slot));
+					}
+					return Write(ErrorMessage(QStringLiteral("input slot was not ready"),
+											  message.ticket_id));
+				}
+				if (int(consumed_slot) != requested_slot) {
+					input_pool_->Release(consumed_slot);
+					for (int slot : input_slots) {
+						input_pool_->Release(uint32_t(slot));
+					}
+					return Write(ErrorMessage(QStringLiteral("input slot order mismatch"),
+											  message.ticket_id));
+				}
+				input_slots.append(int(consumed_slot));
+			}
+		}
+
 		olive::VideoParams vparams(message.width > 0 ? message.width : kDefaultWidth,
 								   message.height > 0 ? message.height : kDefaultHeight,
 								   olive::rational(1, kDefaultFrameRate),
@@ -298,9 +355,24 @@ private:
 		ticket->setProperty("cachetimebase", QVariant::fromValue(olive::rational(1)));
 		ticket->setProperty("cacheid", QVariant::fromValue(QUuid()));
 		ticket->setProperty("multicam", olive::QtUtils::PtrToValue(static_cast<void *>(nullptr)));
+		ticket->setProperty("ipc_input_pool",
+							olive::QtUtils::PtrToValue(
+								input_pool_ ? static_cast<void *>(&*input_pool_)
+											: static_cast<void *>(nullptr)));
+		QVariantList input_slot_values;
+		for (int slot : input_slots) {
+			input_slot_values.append(slot);
+		}
+		ticket->setProperty("ipc_input_slots", input_slot_values);
+		ticket->setProperty("ipc_input_slot_cursor", 0);
+		ticket->setProperty("ipc_input_slot",
+							input_slots.isEmpty() ? -1 : input_slots.front());
 
 		ticket->Start();
 		olive::RenderProcessor::Process(ticket, renderer_, nullptr, &shader_cache_);
+		for (int slot : input_slots) {
+			input_pool_->Release(uint32_t(slot));
+		}
 		if (!ticket->HasResult()) {
 			return Write(ErrorMessage(QStringLiteral("render produced no frame"), message.ticket_id));
 		}
@@ -353,6 +425,8 @@ private:
 	QHash<QString, olive::Node *> node_by_token_;
 	olive::ipc::SharedMemoryRegion output_region_;
 	std::optional<olive::ipc::FrameSlotPool> output_pool_;
+	olive::ipc::SharedMemoryRegion input_region_;
+	std::optional<olive::ipc::FrameSlotPool> input_pool_;
 	olive::ShaderCache shader_cache_;
 };
 

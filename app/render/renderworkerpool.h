@@ -23,9 +23,11 @@
 
 #include <QMutex>
 #include <QThread>
+#include <QVector>
 #include <QWaitCondition>
 #include <deque>
 
+#include "codec/frame.h"
 #include "node/project/serializer/serializer.h"
 #include "render/ipc/frameslotpool.h"
 #include "render/ipc/ipcmessage.h"
@@ -38,7 +40,8 @@ namespace olive
 class RenderWorkerPool : public QThread {
 	Q_OBJECT
 public:
-	explicit RenderWorkerPool(QObject *parent = nullptr);
+	explicit RenderWorkerPool(DecoderCache *decoder_cache,
+							  QObject *parent = nullptr);
 	~RenderWorkerPool() override;
 
 	bool SubmitFrame(RenderTicketPtr ticket,
@@ -61,6 +64,7 @@ private:
 		RenderManager::RenderVideoParams params;
 		QString graph_path;
 		QString node_token;
+		QVector<FramePtr> input_frames;
 	};
 
 	bool PrepareJob(RenderTicketPtr ticket,
@@ -74,6 +78,7 @@ private:
 						 uint32_t slot);
 	void CleanupGraphFile(const QString &path);
 
+	DecoderCache *decoder_cache_;
 	QMutex mutex_;
 	QWaitCondition wait_;
 	std::deque<Job> queue_;

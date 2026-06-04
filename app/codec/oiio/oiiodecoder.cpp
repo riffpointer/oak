@@ -123,6 +123,17 @@ bool OIIODecoder::OpenInternal()
 
 TexturePtr OIIODecoder::RetrieveVideoInternal(const RetrieveVideoParams &p)
 {
+	FramePtr frame = RetrieveVideoFrameInternal(p);
+	if (!frame) {
+		return nullptr;
+	}
+
+	return p.renderer->CreateTexture(frame->video_params(), frame->data(),
+									 frame->linesize_pixels());
+}
+
+FramePtr OIIODecoder::RetrieveVideoFrameInternal(const RetrieveVideoParams &p)
+{
 	VideoParams vp = GetVideoParamsFromImageSpec(image_->spec());
 	vp.set_divider(p.divider);
 
@@ -163,15 +174,19 @@ TexturePtr OIIODecoder::RetrieveVideoInternal(const RetrieveVideoParams &p)
 	if (vp.format() != PixelFormat::F32) {
 		FramePtr f32_frame = buffer_.convert(PixelFormat::F32);
 		if (f32_frame) {
-			VideoParams f32_vp = vp;
-			f32_vp.set_format(PixelFormat::F32);
-			return p.renderer->CreateTexture(f32_vp, f32_frame->data(),
-											 f32_frame->linesize_pixels());
+			f32_frame->set_timestamp(p.time);
+			return f32_frame;
 		}
 	}
 
-	return p.renderer->CreateTexture(vp, buffer_.data(),
-									 buffer_.linesize_pixels());
+	FramePtr frame = Frame::Create();
+	frame->set_video_params(buffer_.video_params());
+	frame->set_timestamp(p.time);
+	if (!frame->allocate()) {
+		return nullptr;
+	}
+	memcpy(frame->data(), buffer_.const_data(), size_t(buffer_.allocated_size()));
+	return frame;
 }
 
 void OIIODecoder::CloseInternal()

@@ -124,6 +124,29 @@ TexturePtr Decoder::RetrieveVideo(const RetrieveVideoParams &p)
 	return cached_texture_;
 }
 
+FramePtr Decoder::RetrieveVideoFrame(const RetrieveVideoParams &p)
+{
+	QMutexLocker locker(&mutex_);
+
+	UpdateLastAccessed();
+
+	if (!stream_.IsValid()) {
+		qCritical() << "Can't retrieve video frame on a closed decoder";
+		return nullptr;
+	}
+
+	if (!SupportsVideo()) {
+		qCritical() << "Decoder doesn't support video";
+		return nullptr;
+	}
+
+	if (p.cancelled && p.cancelled->IsCancelled()) {
+		return nullptr;
+	}
+
+	return RetrieveVideoFrameInternal(p);
+}
+
 Decoder::RetrieveAudioStatus
 Decoder::RetrieveAudio(SampleBuffer &dest, const TimeRange &range,
 					   const AudioParams &params, const QString &cache_path,
@@ -286,6 +309,12 @@ int64_t Decoder::GetImageSequenceIndex(const QString &filename)
 }
 
 TexturePtr Decoder::RetrieveVideoInternal(const RetrieveVideoParams &p)
+{
+	Q_UNUSED(p)
+	return nullptr;
+}
+
+FramePtr Decoder::RetrieveVideoFrameInternal(const RetrieveVideoParams &p)
 {
 	Q_UNUSED(p)
 	return nullptr;

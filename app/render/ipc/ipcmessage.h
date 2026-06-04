@@ -25,6 +25,7 @@
 #include <QByteArray>
 #include <QJsonObject>
 #include <QString>
+#include <QVector>
 
 class QIODevice;
 
@@ -91,10 +92,12 @@ bool ReadMessage(QByteArray *buffer, QJsonObject *out, bool *ok = nullptr);
 
 struct HandshakeMsg {
 	int protocol_version = 0;
-	QString shm_key;          ///< Shared-memory segment key for this worker.
+	QString shm_key;          ///< Worker->main output shared-memory segment key.
+	QString input_shm_key;    ///< Main->worker input shared-memory segment key (optional).
 	int input_slots = 0;      ///< Number of main->worker input frame slots.
 	int output_slots = 0;     ///< Number of worker->main output frame slots.
-	qint64 slot_data_bytes = 0;  ///< Per-slot pixel block size (max frame size).
+	qint64 slot_data_bytes = 0;        ///< Per-output-slot pixel block size.
+	qint64 input_slot_data_bytes = 0;  ///< Per-input-slot pixel block size.
 
 	QJsonObject ToJson() const;
 	static bool FromJson(const QJsonObject &o, HandshakeMsg *out);
@@ -110,6 +113,8 @@ struct RenderFrameMsg {
 	int format = -1;          ///< Forced PixelFormat::Format (-1 = default/INVALID).
 	int channel_count = 0;    ///< 0 = default.
 	int mode = 0;             ///< RenderMode::Mode.
+	int input_slot = -1;      ///< Optional main->worker decoded input slot for footage nodes.
+	QVector<int> input_slots; ///< Optional ordered decoded input slots for footage nodes.
 
 	QJsonObject ToJson() const;
 	static bool FromJson(const QJsonObject &o, RenderFrameMsg *out);

@@ -274,9 +274,11 @@ TEST(IpcMessage, TypedRoundTrip)
 	HandshakeMsg hs;
 	hs.protocol_version = 1;
 	hs.shm_key = QStringLiteral("olive-rw-1234-0");
+	hs.input_shm_key = QStringLiteral("olive-in-1234-0");
 	hs.input_slots = 4;
 	hs.output_slots = 6;
 	hs.slot_data_bytes = 256ll * 1024 * 1024;
+	hs.input_slot_data_bytes = 128ll * 1024 * 1024;
 	ASSERT_TRUE(WriteMessage(&dev, hs.ToJson()));
 
 	RenderFrameMsg rf;
@@ -289,6 +291,8 @@ TEST(IpcMessage, TypedRoundTrip)
 	rf.format = 3;
 	rf.channel_count = 4;
 	rf.mode = 1;
+	rf.input_slot = 2;
+	rf.input_slots = {2, 3};
 	ASSERT_TRUE(WriteMessage(&dev, rf.ToJson()));
 
 	FrameReadyMsg fr;
@@ -308,9 +312,11 @@ TEST(IpcMessage, TypedRoundTrip)
 	ASSERT_TRUE(HandshakeMsg::FromJson(obj, &hs2));
 	EXPECT_EQ(hs2.protocol_version, 1);
 	EXPECT_EQ(hs2.shm_key, hs.shm_key);
+	EXPECT_EQ(hs2.input_shm_key, hs.input_shm_key);
 	EXPECT_EQ(hs2.input_slots, 4);
 	EXPECT_EQ(hs2.output_slots, 6);
 	EXPECT_EQ(hs2.slot_data_bytes, hs.slot_data_bytes);
+	EXPECT_EQ(hs2.input_slot_data_bytes, hs.input_slot_data_bytes);
 
 	ASSERT_TRUE(ReadMessage(&reader, &obj, &ok));
 	ASSERT_TRUE(ok);
@@ -322,6 +328,10 @@ TEST(IpcMessage, TypedRoundTrip)
 	EXPECT_EQ(rf2.time_den, 30000);
 	EXPECT_EQ(rf2.width, 1920);
 	EXPECT_EQ(rf2.format, 3);
+	EXPECT_EQ(rf2.input_slot, 2);
+	ASSERT_EQ(rf2.input_slots.size(), 2);
+	EXPECT_EQ(rf2.input_slots[0], 2);
+	EXPECT_EQ(rf2.input_slots[1], 3);
 
 	ASSERT_TRUE(ReadMessage(&reader, &obj, &ok));
 	ASSERT_TRUE(ok);

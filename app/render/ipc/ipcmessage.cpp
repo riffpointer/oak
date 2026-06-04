@@ -20,6 +20,7 @@
 
 #include "ipcmessage.h"
 
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QIODevice>
 
@@ -78,9 +79,11 @@ QJsonObject HandshakeMsg::ToJson() const
 	o["type"] = msgtype::kHandshake;
 	o["protocol_version"] = protocol_version;
 	o["shm_key"] = shm_key;
+	o["input_shm_key"] = input_shm_key;
 	o["input_slots"] = input_slots;
 	o["output_slots"] = output_slots;
 	o["slot_data_bytes"] = double(slot_data_bytes);
+	o["input_slot_data_bytes"] = double(input_slot_data_bytes);
 	return o;
 }
 
@@ -91,9 +94,11 @@ bool HandshakeMsg::FromJson(const QJsonObject &o, HandshakeMsg *out)
 	}
 	out->protocol_version = o["protocol_version"].toInt();
 	out->shm_key = o["shm_key"].toString();
+	out->input_shm_key = o["input_shm_key"].toString();
 	out->input_slots = o["input_slots"].toInt();
 	out->output_slots = o["output_slots"].toInt();
 	out->slot_data_bytes = qint64(o["slot_data_bytes"].toDouble());
+	out->input_slot_data_bytes = qint64(o["input_slot_data_bytes"].toDouble());
 	return true;
 }
 
@@ -112,6 +117,12 @@ QJsonObject RenderFrameMsg::ToJson() const
 	o["format"] = format;
 	o["channels"] = channel_count;
 	o["mode"] = mode;
+	o["input_slot"] = input_slot;
+	QJsonArray input_slot_array;
+	for (int slot : input_slots) {
+		input_slot_array.append(slot);
+	}
+	o["input_slots"] = input_slot_array;
 	return o;
 }
 
@@ -129,6 +140,15 @@ bool RenderFrameMsg::FromJson(const QJsonObject &o, RenderFrameMsg *out)
 	out->format = o["format"].toInt(-1);
 	out->channel_count = o["channels"].toInt();
 	out->mode = o["mode"].toInt();
+	out->input_slot = o["input_slot"].toInt(-1);
+	out->input_slots.clear();
+	const QJsonArray input_slot_array = o["input_slots"].toArray();
+	for (const QJsonValue &slot : input_slot_array) {
+		out->input_slots.append(slot.toInt(-1));
+	}
+	if (out->input_slots.isEmpty() && out->input_slot >= 0) {
+		out->input_slots.append(out->input_slot);
+	}
 	return true;
 }
 

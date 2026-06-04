@@ -35,6 +35,7 @@
 #include "render/plugin/pluginrenderer.h"
 #include "pluginSupport/OliveClip.h"
 #include "pluginSupport/OliveHost.h"
+#include "render/ipc/frameslotpool.h"
 
 namespace olive
 {
@@ -419,6 +420,81 @@ void RenderProcessor::ProcessVideoFootage(TexturePtr destination,
 		qWarning() << "HAVEN'T GOTTEN DEFAULT INPUT COLORSPACE";
 	}
 
+	auto blit_color_managed = [&](const TexturePtr &unmanaged_texture,
+								  const VideoParams &texture_params) {
+		if (!render_ctx_ || !unmanaged_texture || IsCancelled()) {
+			return;
+		}
+
+		// We convert to our rendering pixel format, since that will always be float-based which
+		// is necessary for correct color conversion
+		ColorProcessorPtr processor = ColorProcessor::Create(
+			color_manager, using_colorspace,
+			color_manager->GetReferenceColorSpace());
+
+		ColorTransformJob job;
+		job.SetColorProcessor(processor);
+		job.SetInputTexture(unmanaged_texture);
+
+		if (texture_params.channel_count() != VideoParams::kRGBAChannelCount ||
+			texture_params.colorspace() == color_manager->GetReferenceColorSpace()) {
+			job.SetInputAlphaAssociation(kAlphaNone);
+		} else if (texture_params.premultiplied_alpha()) {
+			job.SetInputAlphaAssociation(kAlphaAssociated);
+		} else {
+			job.SetInputAlphaAssociation(kAlphaUnassociated);
+		}
+
+		render_ctx_->BlitColorManaged(job, destination.get());
+		// macOS TBDR: ensure tile writeback completes before the texture
+		// is read back in a potentially different shared OpenGL context.
+		render_ctx_->Flush();
+	};
+
+	auto *input_pool =
+		QtUtils::ValueToPtr<ipc::FrameSlotPool>(ticket_->property("ipc_input_pool"));
+	int input_slot = -1;
+	const QVariantList input_slots = ticket_->property("ipc_input_slots").toList();
+	if (!input_slots.isEmpty()) {
+		const QVariant cursor_value = ticket_->property("ipc_input_slot_cursor");
+		const int cursor = cursor_value.isValid() ? cursor_value.toInt() : 0;
+		if (cursor >= 0 && cursor < input_slots.size()) {
+			input_slot = input_slots.at(cursor).toInt();
+			ticket_->setProperty("ipc_input_slot_cursor", cursor + 1);
+		}
+	} else {
+		const QVariant input_slot_value = ticket_->property("ipc_input_slot");
+		input_slot = input_slot_value.isValid() ? input_slot_value.toInt() : -1;
+	}
+	if (render_ctx_ && input_pool && input_slot >= 0) {
+		const ipc::FrameSlotMeta *meta = input_pool->Meta(uint32_t(input_slot));
+		if (meta && meta->width > 0 && meta->height > 0 && meta->data_size > 0 &&
+			meta->data_size <= int(input_pool->slot_data_bytes())) {
+			VideoParams input_params = stream_data;
+			input_params.set_width(meta->width);
+			input_params.set_height(meta->height);
+			input_params.set_format(PixelFormat::Format(meta->format));
+			input_params.set_channel_count(meta->channel_count);
+
+			const int bytes_per_pixel = input_params.GetBytesPerPixel();
+			const int linesize_pixels = bytes_per_pixel > 0
+											? meta->linesize / bytes_per_pixel
+											: input_params.effective_width();
+			TexturePtr unmanaged_texture = render_ctx_->CreateTexture(
+				input_params, input_pool->SlotData(uint32_t(input_slot)), linesize_pixels);
+			blit_color_managed(unmanaged_texture, input_params);
+			return;
+		}
+		qWarning() << "RenderProcessor received invalid IPC input frame slot" << input_slot;
+		return;
+	}
+
+	if (!decoder_cache_) {
+		qWarning() << "RenderProcessor has no decoder cache or IPC input frame for"
+				   << stream->filename();
+		return;
+	}
+
 	Decoder::CodecStream default_codec_stream(
 		stream->filename(), stream_data.stream_index(), GetCurrentBlock());
 
@@ -474,32 +550,7 @@ void RenderProcessor::ProcessVideoFootage(TexturePtr destination,
 				unmanaged_texture = decoder->RetrieveVideo(p);
 
 				if (!IsCancelled() && unmanaged_texture) {
-					// We convert to our rendering pixel format, since that will always be float-based which
-					// is necessary for correct color conversion
-					ColorProcessorPtr processor = ColorProcessor::Create(
-						color_manager, using_colorspace,
-						color_manager->GetReferenceColorSpace());
-
-					ColorTransformJob job;
-
-					job.SetColorProcessor(processor);
-					job.SetInputTexture(unmanaged_texture);
-
-					if (stream_data.channel_count() !=
-							VideoParams::kRGBAChannelCount ||
-						stream_data.colorspace() ==
-							color_manager->GetReferenceColorSpace()) {
-						job.SetInputAlphaAssociation(kAlphaNone);
-					} else if (stream_data.premultiplied_alpha()) {
-						job.SetInputAlphaAssociation(kAlphaAssociated);
-					} else {
-						job.SetInputAlphaAssociation(kAlphaUnassociated);
-					}
-
-					render_ctx_->BlitColorManaged(job, destination.get());
-					// macOS TBDR: ensure tile writeback completes before the texture
-					// is read back in a potentially different shared OpenGL context.
-					render_ctx_->Flush();
+					blit_color_managed(unmanaged_texture, stream_data);
 				}
 			}
 		}

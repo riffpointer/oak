@@ -68,7 +68,7 @@ RenderManager::RenderManager(QObject *parent)
 		auto_cacher_ = new PreviewAutoCacher(this);
 
 		if (OLIVE_CONFIG("RenderProcessIsolationEnabled").toBool()) {
-			worker_pool_ = new RenderWorkerPool(this);
+			worker_pool_ = new RenderWorkerPool(decoder_cache_, this);
 			worker_pool_->start(QThread::NormalPriority);
 			backend_ = kMultiProcess;
 		}

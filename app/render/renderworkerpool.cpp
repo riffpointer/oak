@@ -23,14 +23,18 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
 #include <QTemporaryFile>
 #include <QXmlStreamWriter>
+#include <optional>
 
 #include "codec/frame.h"
 #include "common/qtutils.h"
+#include "node/project/footage/footage.h"
+#include "node/traverser.h"
 
 namespace olive
 {
@@ -39,6 +43,167 @@ namespace
 {
 
 constexpr int kProtocolVersion = 1;
+
+struct FootageInput {
+	FootageJob job;
+	rational time;
+};
+
+class FootageInputCollector : public NodeTraverser {
+public:
+	QVector<FootageInput> Collect(const RenderManager::RenderVideoParams &params,
+								  CancelAtom *cancel)
+	{
+		SetCancelPointer(cancel);
+		VideoParams cache_params = params.video_params;
+		cache_params.set_format(PixelFormat::F32);
+		SetCacheVideoParams(cache_params);
+		SetCacheAudioParams(params.audio_params);
+
+		rational frame_length = cache_params.frame_rate_as_time_base();
+		if (cache_params.interlacing() != VideoParams::kInterlaceNone) {
+			frame_length /= 2;
+		}
+		NodeValueTable table = GenerateTable(params.node,
+											 TimeRange(params.time,
+													   params.time + frame_length));
+		NodeValue texture = table.Get(NodeValue::kTexture);
+		ResolveJobs(texture);
+
+		if (cache_params.interlacing() != VideoParams::kInterlaceNone) {
+			NodeValueTable second_table =
+				GenerateTable(params.node,
+							  TimeRange(params.time + frame_length,
+										params.time + frame_length * 2));
+			NodeValue second_texture = second_table.Get(NodeValue::kTexture);
+			ResolveJobs(second_texture);
+		}
+
+		return inputs_;
+	}
+
+protected:
+	void ProcessVideoFootage(TexturePtr destination,
+							 const FootageJob *stream,
+							 const rational &input_time) override
+	{
+		Q_UNUSED(destination)
+		if (stream) {
+			inputs_.append({*stream, input_time});
+		}
+	}
+
+private:
+	QVector<FootageInput> inputs_;
+};
+
+DecoderPtr ResolveDecoderFromCache(DecoderCache *decoder_cache,
+								   const QString &decoder_id,
+								   const Decoder::CodecStream &stream)
+{
+	if (!decoder_cache || !stream.IsValid()) {
+		return nullptr;
+	}
+
+	QMutexLocker locker(decoder_cache->mutex());
+	DecoderPair decoder = decoder_cache->value(stream);
+	const qint64 file_last_modified =
+		QFileInfo(stream.filename()).lastModified().toMSecsSinceEpoch();
+
+	if (decoder.decoder && decoder.last_modified == file_last_modified) {
+		return decoder.decoder;
+	}
+
+	decoder.decoder = Decoder::CreateFromID(decoder_id);
+	decoder.last_modified = file_last_modified;
+	decoder_cache->insert(stream, decoder);
+	locker.unlock();
+
+	if (!decoder.decoder || !decoder.decoder->Open(stream)) {
+		qWarning() << "RenderWorkerPool failed to open decoder for"
+				   << stream.filename() << "::" << stream.stream();
+		return nullptr;
+	}
+
+	return decoder.decoder;
+}
+
+FramePtr DecodeInputFrame(DecoderCache *decoder_cache,
+						  const FootageInput &input,
+						  CancelAtom *cancel)
+{
+	VideoParams stream_data = input.job.video_params();
+	QString filename = input.job.filename();
+	DecoderPtr decoder;
+
+	switch (stream_data.video_type()) {
+	case VideoParams::kVideoTypeVideo:
+	case VideoParams::kVideoTypeStill:
+		decoder = ResolveDecoderFromCache(
+			decoder_cache,
+			input.job.decoder(),
+			Decoder::CodecStream(filename, stream_data.stream_index(), nullptr));
+		break;
+	case VideoParams::kVideoTypeImageSequence: {
+		const int64_t frame_number =
+			stream_data.get_time_in_timebase_units(input.time);
+		filename = Decoder::TransformImageSequenceFileName(filename, frame_number);
+		decoder = Decoder::CreateFromID(input.job.decoder());
+		if (decoder &&
+			!decoder->Open(Decoder::CodecStream(filename,
+												stream_data.stream_index(),
+												nullptr))) {
+			decoder = nullptr;
+		}
+		break;
+	}
+	}
+
+	if (!decoder) {
+		return nullptr;
+	}
+
+	Decoder::RetrieveVideoParams retrieve;
+	retrieve.divider = stream_data.divider();
+	retrieve.maximum_format = PixelFormat::U16;
+	retrieve.time = stream_data.video_type() == VideoParams::kVideoTypeVideo
+						? input.time
+						: Decoder::kAnyTimecode;
+	retrieve.cancelled = cancel;
+	retrieve.force_range = stream_data.color_range();
+	retrieve.src_interlacing = stream_data.interlacing();
+	FramePtr frame = decoder->RetrieveVideoFrame(retrieve);
+	if (frame) {
+		frame->set_timestamp(input.time);
+	}
+	return frame;
+}
+
+bool DecodeInputFrames(DecoderCache *decoder_cache,
+					   const RenderManager::RenderVideoParams &params,
+					   CancelAtom *cancel,
+					   QVector<FramePtr> *frames)
+{
+	frames->clear();
+
+	FootageInputCollector collector;
+	const QVector<FootageInput> inputs = collector.Collect(params, cancel);
+	frames->reserve(inputs.size());
+	for (const FootageInput &input : inputs) {
+		if (cancel && cancel->IsCancelled()) {
+			return false;
+		}
+
+		FramePtr frame = DecodeInputFrame(decoder_cache, input, cancel);
+		if (!frame || !frame->is_allocated()) {
+			frames->clear();
+			return false;
+		}
+		frames->append(frame);
+	}
+
+	return true;
+}
 
 QString WorkerProgramPath()
 {
@@ -100,8 +265,10 @@ bool ReadControlMessage(QProcess *process, QJsonObject *out, QString *error,
 
 }  // namespace
 
-RenderWorkerPool::RenderWorkerPool(QObject *parent)
+RenderWorkerPool::RenderWorkerPool(DecoderCache *decoder_cache,
+								   QObject *parent)
 	: QThread(parent)
+	, decoder_cache_(decoder_cache)
 {
 }
 
@@ -174,6 +341,14 @@ bool RenderWorkerPool::PrepareJob(RenderTicketPtr ticket,
 		return false;
 	}
 
+	QVector<FramePtr> input_frames;
+	if (!DecodeInputFrames(decoder_cache_, params, ticket->GetCancelAtom(),
+						   &input_frames)) {
+		qWarning() << "RenderWorkerPool could not predecode footage inputs;"
+				   << "falling back to in-process render";
+		return false;
+	}
+
 	QString graph_path;
 	if (!WriteGraphSnapshot(project, &graph_path)) {
 		return false;
@@ -183,6 +358,7 @@ bool RenderWorkerPool::PrepareJob(RenderTicketPtr ticket,
 	job->params = params;
 	job->graph_path = graph_path;
 	job->node_token = QString::number(reinterpret_cast<quintptr>(params.node));
+	job->input_frames = input_frames;
 	return true;
 }
 
@@ -244,6 +420,72 @@ void RenderWorkerPool::ProcessJob(const Job &job)
 	ipc::FrameSlotPool output_pool =
 		ipc::FrameSlotPool::Create(region.data(), kOutputSlots, slot_bytes);
 
+	const QString input_shm_key =
+		job.input_frames.isEmpty()
+			? QString()
+			: ipc::SharedMemoryRegion::MakeKey(
+				  QCoreApplication::applicationPid(),
+				  int((reinterpret_cast<quintptr>(job.ticket.get()) + 1) & 0xFFFF));
+	ipc::SharedMemoryRegion input_region;
+	std::optional<ipc::FrameSlotPool> input_pool;
+	QVector<int> input_slots;
+	if (!job.input_frames.isEmpty()) {
+		const uint32_t input_slot_count = uint32_t(job.input_frames.size());
+		const size_t input_region_bytes =
+			ipc::FrameSlotPool::BytesNeeded(input_slot_count, slot_bytes);
+		if (!input_region.Open(input_shm_key, input_region_bytes,
+							   ipc::SharedMemoryRegion::kCreate)) {
+			qWarning() << "RenderWorkerPool failed to create input shared memory"
+					   << input_region.error();
+			job.ticket->Finish();
+			return;
+		} else {
+			input_pool = ipc::FrameSlotPool::Create(input_region.data(),
+													input_slot_count,
+													slot_bytes);
+			for (const FramePtr &frame : job.input_frames) {
+				if (frame->allocated_size() > int(slot_bytes)) {
+					qWarning() << "RenderWorkerPool decoded input frame exceeds slot size";
+					job.ticket->Finish();
+					return;
+				}
+
+				uint32_t slot = 0;
+				if (!input_pool->Acquire(&slot)) {
+					qWarning() << "RenderWorkerPool input pool had no free slot";
+					job.ticket->Finish();
+					return;
+				}
+
+				memcpy(input_pool->SlotData(slot), frame->const_data(),
+					   size_t(frame->allocated_size()));
+				ipc::FrameSlotMeta *meta = input_pool->Meta(slot);
+				meta->id = qint64(input_slots.size());
+				meta->time_num = frame->timestamp().numerator();
+				meta->time_den = frame->timestamp().denominator();
+				meta->width = frame->width();
+				meta->height = frame->height();
+				meta->format = int32_t(frame->format());
+				meta->channel_count = frame->channel_count();
+				meta->linesize = frame->linesize_bytes();
+				meta->data_size = frame->allocated_size();
+				if (!input_pool->Publish(slot)) {
+					qWarning() << "RenderWorkerPool failed to publish input slot";
+					job.ticket->Finish();
+					return;
+				}
+				input_slots.append(int(slot));
+			}
+
+			if (input_slots.size() != job.input_frames.size()) {
+				qWarning() << "RenderWorkerPool failed to publish all input frames;"
+						   << "aborting worker render";
+				job.ticket->Finish();
+				return;
+			}
+		}
+	}
+
 	QProcess worker;
 	worker.setProgram(WorkerProgramPath());
 	worker.start();
@@ -268,9 +510,11 @@ void RenderWorkerPool::ProcessJob(const Job &job)
 	ipc::HandshakeMsg handshake;
 	handshake.protocol_version = kProtocolVersion;
 	handshake.shm_key = shm_key;
-	handshake.input_slots = 0;
+	handshake.input_shm_key = input_slots.isEmpty() ? QString() : input_shm_key;
+	handshake.input_slots = input_slots.size();
 	handshake.output_slots = int(kOutputSlots);
 	handshake.slot_data_bytes = qint64(slot_bytes);
+	handshake.input_slot_data_bytes = input_slots.isEmpty() ? 0 : qint64(slot_bytes);
 	if (!WriteControlMessage(&worker, handshake.ToJson())) {
 		qWarning() << "RenderWorkerPool failed to send shared-memory handshake";
 		worker.kill();
@@ -301,6 +545,8 @@ void RenderWorkerPool::ProcessJob(const Job &job)
 	render.format = int(job.params.force_format);
 	render.channel_count = job.params.force_channel_count;
 	render.mode = int(job.params.mode);
+	render.input_slot = input_slots.isEmpty() ? -1 : input_slots.front();
+	render.input_slots = input_slots;
 
 	if (!WriteControlMessage(&worker, render.ToJson())) {
 		qWarning() << "RenderWorkerPool failed to send render_frame";

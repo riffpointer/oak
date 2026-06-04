@@ -23,6 +23,34 @@
 
 namespace olive {
 
+static FramePtr CopyPackedAVFrameToFrame(const AVFramePtr &src,
+										 PixelFormat format,
+										 int channel_count,
+										 const rational &timestamp)
+{
+	if (!src || !src->data[0]) {
+		return nullptr;
+	}
+
+	VideoParams params(src->width, src->height, format, channel_count);
+	FramePtr frame = Frame::Create();
+	frame->set_video_params(params);
+	frame->set_timestamp(timestamp);
+	if (!frame->allocate()) {
+		return nullptr;
+	}
+
+	const int row_bytes = params.effective_width() *
+						  VideoParams::GetBytesPerPixel(format, channel_count);
+	for (int y = 0; y < frame->height(); y++) {
+		memcpy(frame->data() + y * frame->linesize_bytes(),
+			   src->data[0] + y * src->linesize[0],
+			   size_t(row_bytes));
+	}
+
+	return frame;
+}
+
 static VideoParams::Interlacing FFmpegFieldOrderToOlive(AVFieldOrder fo)
 {
 	switch (fo) {
@@ -370,6 +398,74 @@ TexturePtr FFmpegDecoder::RetrieveVideoInternal(const RetrieveVideoParams &p)
 		TexturePtr texture = ProcessFrameIntoTexture(f, p, original);
 
 		return texture;
+	}
+
+	return nullptr;
+}
+
+FramePtr FFmpegDecoder::RetrieveVideoFrameInternal(const RetrieveVideoParams &p)
+{
+	if (AVFramePtr f = RetrieveFrame(p.time, p.cancelled)) {
+		if (p.cancelled && p.cancelled->IsCancelled()) {
+			return nullptr;
+		}
+
+		f->format = FFmpegUtils::ConvertJPEGSpaceToRegularSpace(
+			static_cast<AVPixelFormat>(f->format));
+		f->color_range = p.force_range == VideoParams::kColorRangeFull ?
+							 AVCOL_RANGE_JPEG :
+							 AVCOL_RANGE_MPEG;
+
+		AVFramePtr dest = CreateAVFramePtr();
+		dest->width = f->width;
+		dest->height = f->height;
+		dest->format = p.maximum_format == PixelFormat::U8
+						   ? AV_PIX_FMT_RGBA
+						   : AV_PIX_FMT_RGBA64;
+		dest->color_range = f->color_range;
+		dest->colorspace = f->colorspace;
+		if (p.divider > 1) {
+			dest->width = VideoParams::GetScaledDimension(dest->width, p.divider);
+			dest->height = VideoParams::GetScaledDimension(dest->height, p.divider);
+		}
+
+		int r = av_frame_get_buffer(dest.get(), 0);
+		if (r < 0) {
+			FFmpegError(r);
+			return nullptr;
+		}
+
+		SwsContext *cpu_sws = sws_getContext(
+			f->width, f->height, static_cast<AVPixelFormat>(f->format),
+			dest->width, dest->height, static_cast<AVPixelFormat>(dest->format),
+			SWS_POINT, nullptr, nullptr, nullptr);
+		if (!cpu_sws) {
+			qCritical() << "Failed to create CPU frame conversion context";
+			return nullptr;
+		}
+
+		sws_setColorspaceDetails(
+			cpu_sws,
+			sws_getCoefficients(FFmpegUtils::GetSwsColorspaceFromAVColorSpace(
+				dest->colorspace)),
+			dest->color_range == AVCOL_RANGE_JPEG ? 1 : 0,
+			sws_getCoefficients(FFmpegUtils::GetSwsColorspaceFromAVColorSpace(
+				dest->colorspace)),
+			dest->color_range == AVCOL_RANGE_JPEG ? 1 : 0, 0, 0x10000, 0x10000);
+
+		r = sws_scale_frame(cpu_sws, dest.get(), f.get());
+		sws_freeContext(cpu_sws);
+		if (r < 0) {
+			FFmpegError(r);
+			return nullptr;
+		}
+
+		return CopyPackedAVFrameToFrame(dest,
+										dest->format == AV_PIX_FMT_RGBA
+											? PixelFormat::U8
+											: PixelFormat::U16,
+										VideoParams::kRGBAChannelCount,
+										p.time);
 	}
 
 	return nullptr;

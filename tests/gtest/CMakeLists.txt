@@ -30,6 +30,7 @@ add_executable(olive-gtest
   plugin_renderer_readback_test.cpp
   plugin_ofx_integration_test.cpp
   codec_frame_test.cpp
+  codec_decoder_test.cpp
   codec_exportcodec_test.cpp
   codec_exportformat_test.cpp
   codec_encoder_test.cpp
