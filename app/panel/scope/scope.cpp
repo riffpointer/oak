@@ -59,6 +59,10 @@ ScopePanel::ScopePanel()
 	waveform_view_ = new WaveformScope();
 	stack_->addWidget(waveform_view_);
 
+	// Create vectorscope
+	vectorscope_ = new VectorscopeScope();
+	stack_->addWidget(vectorscope_);
+
 	// Create histogram
 	histogram_ = new HistogramScope();
 	stack_->addWidget(histogram_);
@@ -81,6 +85,8 @@ QString ScopePanel::TypeToName(ScopePanel::Type t)
 	switch (t) {
 	case kTypeWaveform:
 		return tr("Waveform");
+	case kTypeVectorscope:
+		return tr("Vectorscope");
 	case kTypeHistogram:
 		return tr("Histogram");
 	case kTypeCount:
@@ -124,12 +130,14 @@ void ScopePanel::SetViewerPanel(ViewerPanelBase *vp)
 void ScopePanel::SetReferenceBuffer(TexturePtr frame)
 {
 	histogram_->SetBuffer(frame);
+	vectorscope_->SetBuffer(frame);
 	waveform_view_->SetBuffer(frame);
 }
 
 void ScopePanel::SetColorManager(ColorManager *manager)
 {
 	histogram_->ConnectColorManager(manager);
+	vectorscope_->ConnectColorManager(manager);
 	waveform_view_->ConnectColorManager(manager);
 }
 

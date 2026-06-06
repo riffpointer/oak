@@ -10,7 +10,10 @@ TEST(Shaders, ResourcesAvailable)
 		QStringLiteral(":/shaders/yuv2rgb.frag"),
 		QStringLiteral(":/shaders/deinterlace2.frag"),
 		QStringLiteral(":/shaders/rgbhistogram.frag"),
-		QStringLiteral(":/shaders/rgbhistogram.vert")
+		QStringLiteral(":/shaders/rgbhistogram.vert"),
+		QStringLiteral(":/shaders/rgbvectorscope.frag"),
+		QStringLiteral(":/shaders/rgbvectorscope.vert"),
+		QStringLiteral(":/shaders/threewaycolor.frag")
 	};
 
 	for (const QString &path : shader_paths) {

@@ -949,6 +949,8 @@ void NodeParamViewWidgetBridge::SetProperty(const QString &key,
 			ff->SetPlaceholder(value.toString());
 		} else if (key == QStringLiteral("directory")) {
 			ff->SetDirectoryMode(value.toBool());
+		} else if (key == QStringLiteral("filter")) {
+			ff->SetNameFilter(value.toString());
 		}
 	}
 

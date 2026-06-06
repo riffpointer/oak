@@ -53,6 +53,11 @@ public:
 		directory_mode_ = e;
 	}
 
+	void SetNameFilter(const QString &filter)
+	{
+		name_filter_ = filter;
+	}
+
 signals:
 	void FilenameChanged(const QString &filename);
 
@@ -62,6 +67,8 @@ private:
 	QPushButton *browse_btn_;
 
 	bool directory_mode_;
+
+	QString name_filter_;
 
 private slots:
 	void BrowseBtnClicked();

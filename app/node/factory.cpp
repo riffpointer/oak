@@ -32,6 +32,8 @@
 #include "block/transition/diptocolor/diptocolortransition.h"
 #include "color/displaytransform/displaytransform.h"
 #include "color/ociogradingtransformlinear/ociogradingtransformlinear.h"
+#include "color/ociolut/ociolut.h"
+#include "color/threewaycolor/threewaycolor.h"
 #include "common/Current.h"
 #include "distort/cornerpin/cornerpindistortnode.h"
 #include "distort/crop/cropdistortnode.h"
@@ -358,6 +360,10 @@ Node *NodeFactory::CreateFromFactoryIndex(const NodeFactory::InternalID &id)
 		return new DisplayTransformNode();
 	case kOCIOGradingTransformLinear:
 		return new OCIOGradingTransformLinearNode();
+	case kOCIOLut:
+		return new OCIOLutNode();
+	case kThreeWayColor:
+		return new ThreeWayColorNode();
 	case kChromaKey:
 		return new ChromaKeyNode();
 	case kMaskDistort:

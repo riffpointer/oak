@@ -73,6 +73,8 @@ public:
 		kCornerPinDistort,
 		kDisplayTransform,
 		kOCIOGradingTransformLinear,
+		kOCIOLut,
+		kThreeWayColor,
 		kChromaKey,
 		kMaskDistort,
 		kDropShadowFilter,

@@ -59,7 +59,8 @@ void FileField::BrowseBtnClicked()
 	if (directory_mode_) {
 		s = QFileDialog::getExistingDirectory(this, tr("Open Directory"));
 	} else {
-		s = QFileDialog::getOpenFileName(this, tr("Open File"));
+		s = QFileDialog::getOpenFileName(this, tr("Open File"), QString(),
+										 name_filter_);
 	}
 
 	if (!s.isEmpty()) {

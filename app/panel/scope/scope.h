@@ -28,6 +28,7 @@
 #include "panel/panel.h"
 #include "panel/viewer/viewerbase.h"
 #include "widget/scope/histogram/histogram.h"
+#include "widget/scope/vectorscope/vectorscope.h"
 #include "widget/scope/waveform/waveform.h"
 
 namespace olive
@@ -38,6 +39,7 @@ class ScopePanel : public PanelWidget {
 public:
 	enum Type {
 		kTypeWaveform,
+		kTypeVectorscope,
 		kTypeHistogram,
 
 		kTypeCount
@@ -72,6 +74,8 @@ private:
 	QComboBox *scope_type_combobox_;
 
 	WaveformScope *waveform_view_;
+
+	VectorscopeScope *vectorscope_;
 
 	HistogramScope *histogram_;
 

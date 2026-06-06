@@ -3,6 +3,7 @@ add_executable(olive-gtest
   common_current_test.cpp
   common_xmlutils_test.cpp
   config_test.cpp
+  color_lut_test.cpp
   node_value_test.cpp
   node_keyframe_test.cpp
   node_serialization_test.cpp
