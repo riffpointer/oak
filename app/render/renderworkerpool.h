@@ -34,6 +34,8 @@
 #include "render/ipc/sharedmemoryregion.h"
 #include "render/rendermanager.h"
 
+class QProcess;
+
 namespace olive
 {
 
@@ -46,6 +48,8 @@ public:
 
 	bool SubmitFrame(RenderTicketPtr ticket,
 					 const RenderManager::RenderVideoParams &params);
+
+	bool RemoveTicket(RenderTicketPtr ticket);
 
 	void Shutdown();
 
@@ -67,24 +71,47 @@ private:
 		QVector<FramePtr> input_frames;
 	};
 
+	enum class JobResult {
+		kFinished,
+		kRetryableFailure,
+		kFatalFailure,
+		kCancelled
+	};
+
+	struct ActiveJob {
+		RenderTicketPtr ticket;
+		qint64 process_id = 0;
+		qint64 ticket_id = 0;
+	};
+
 	bool PrepareJob(RenderTicketPtr ticket,
 					const RenderManager::RenderVideoParams &params,
 					Job *job);
 	bool WriteGraphSnapshot(Project *project, QString *path);
 	bool IsSupported(const RenderManager::RenderVideoParams &params) const;
 
-	void ProcessJob(const Job &job);
+	void WorkerLoop(int worker_index);
+	void ProcessJob(const Job &job, int worker_index);
+	JobResult ProcessJobAttempt(const Job &job, int worker_index,
+								int attempt_index);
 	void FinishWithFrame(RenderTicketPtr ticket, const ipc::FrameSlotPool &pool,
 						 uint32_t slot);
 	void CleanupGraphFile(const QString &path);
+	void CancelActiveProcess(qint64 process_id);
+	void SetActiveWorker(int worker_index, RenderTicketPtr ticket,
+						 QProcess *worker, qint64 ticket_id);
+	void ClearActiveWorker(int worker_index, qint64 process_id);
+	int WorkerCount() const;
 
 	DecoderCache *decoder_cache_;
 	QMutex mutex_;
 	QWaitCondition wait_;
 	std::deque<Job> queue_;
 	bool stopping_ = false;
+	QVector<ActiveJob> active_jobs_;
 
 	static constexpr uint32_t kOutputSlots = 2;
+	static constexpr int kMaxAttempts = 2;
 	static constexpr int kMaxWidth = 4096;
 	static constexpr int kMaxHeight = 2160;
 };

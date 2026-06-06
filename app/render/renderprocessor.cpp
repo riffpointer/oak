@@ -467,6 +467,12 @@ void RenderProcessor::ProcessVideoFootage(TexturePtr destination,
 		input_slot = input_slot_value.isValid() ? input_slot_value.toInt() : -1;
 	}
 	if (render_ctx_ && input_pool && input_slot >= 0) {
+		if (input_slot >= int(input_pool->slot_count())) {
+			qWarning() << "RenderProcessor received out-of-range IPC input frame slot"
+					   << input_slot;
+			return;
+		}
+
 		const ipc::FrameSlotMeta *meta = input_pool->Meta(uint32_t(input_slot));
 		if (meta && meta->width > 0 && meta->height > 0 && meta->data_size > 0 &&
 			meta->data_size <= int(input_pool->slot_data_bytes())) {

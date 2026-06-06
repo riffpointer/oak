@@ -181,6 +181,10 @@ RenderTicketPtr RenderManager::RenderAudio(const RenderAudioParams &params)
 
 bool RenderManager::RemoveTicket(RenderTicketPtr ticket)
 {
+	if (worker_pool_ && worker_pool_->RemoveTicket(ticket)) {
+		return true;
+	}
+
 	for (RenderThread *rt : render_threads_) {
 		if (rt->RemoveTicket(ticket)) {
 			return true;

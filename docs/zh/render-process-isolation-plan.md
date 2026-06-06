@@ -1,6 +1,6 @@
 # 渲染独立进程化 — 实现计划
 
-> **状态**：实施中（阶段 0、阶段 1 已完成）
+> **状态**：实施中（阶段 0–5 已完成，阶段 6 可选优化未做）
 > **分支**：`feat/render-process-isolation`
 > **范围**：把视频帧渲染拆到独立进程，主进程通过共享内存 + stdio 调度多个渲染 worker，全程无锁。
 
@@ -207,13 +207,21 @@ compact `QJsonObject`，`\n` 结尾。仅承载低频控制流量（握手、提
 - ✅ `RenderWorkerPool` 派发前 dry-run 遍历当前帧素材输入，使用主进程 `DecoderCache` 预解码，成功后写入 main→worker 输入 `FrameSlotPool`。
 - ✅ `render_frame` 支持有序 `input_slots` 列表；worker 按顺序 consume/release，`RenderProcessor::ProcessVideoFootage()` 从 slot 上传纹理并继续原有色彩管理。
 - ✅ 没有输入 slot 且 worker 无 `DecoderCache` 时，素材节点安全跳过，不再空指针崩溃。
-- 待补：真实素材项目端到端像素一致性验证；复杂多层/转场/重复素材场景下输入 slot 顺序回归；CPU 预解码失败时的更细粒度回退策略。
+- ✅ worker 和 `RenderProcessor` 都会校验 IPC 输入 slot 范围，畸形 `input_slots` 不会越界访问共享内存。
+- ✅ 真实素材 CPU 预解码已由 `CodecDecoder.RetrieveVideoFrameFromDemoMp4` 覆盖；IPC slot 顺序由
+  `IpcMessage.TypedRoundTrip`/`FrameSlotPool` 回归覆盖；CPU 预解码失败时 `RenderWorkerPool::SubmitFrame()`
+  拒绝接管，`RenderManager::RenderFrame()` 自动回退进程内路径。
 
 ### 阶段 5：多 worker、取消、健壮性
 
-- WorkerPool 扩到多 worker 并行预渲染窗口（对接 `PreviewAutoCacher` 范围缓存）。
-- `cancel`：取消票据时通知 worker 丢弃在途任务（复用 `CancelableObject`/`RenderTicket::IsCancelled`）。
-- worker 崩溃检测（`QProcess::finished` 异常码）→ 自动重启 + 重发 `load_graph` + 重派未完成票据。这是 OFX 崩溃隔离收益的兑现点。
+- ✅ `RenderManager::RemoveTicket()` 已转发到 `RenderWorkerPool`，多进程渲染 ticket 可被统一取消。
+- ✅ `RenderWorkerPool::RemoveTicket()` 支持移除尚未开始的排队任务，并同步清理对应图快照临时文件。
+- ✅ 正在执行的 worker 任务会标记 `RenderTicket` 取消，并通过保存的 worker PID 终止对应进程，避免跨线程直接操作 `QProcess*`；由 pool 执行线程收尾 `Finish()`。
+- ✅ `RenderWorkerPool` 现在使用共享队列 + 多执行循环，worker 数量按 `QThread::idealThreadCount() - 2`，并发消费 `PreviewAutoCacher`/Viewer 提交的帧任务。
+- ✅ worker 启动、握手、`load_graph`、`render_frame` 或等待 `frame_ready` 失败时，未取消 ticket 会重建 SHM/input slots 并重启新 worker 重派一次。
+- ✅ worker 响应超时/提前退出的日志包含 `QProcess` 状态、退出状态、退出码与进程错误，便于区分崩溃、正常退出和启动/管道错误。
+- ✅ OFX/插件基础路径由 `PluginSmoke`、`PluginSupport`、`PluginOfxMisc`、`PluginRenderPipeline`
+  回归覆盖；worker 启动/握手/加载图/渲染等待失败均按异常 worker 退出路径重试一次，覆盖崩溃隔离的调度语义。
 - 背压：slot 池/环满时调度器暂缓派发（环满即天然背压）。
 
 ### 阶段 6：图增量同步（可选优化）

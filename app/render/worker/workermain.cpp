@@ -302,6 +302,15 @@ private:
 			}
 
 			for (int requested_slot : requested_input_slots) {
+				if (requested_slot < 0 ||
+					requested_slot >= int(input_pool_->slot_count())) {
+					for (int slot : input_slots) {
+						input_pool_->Release(uint32_t(slot));
+					}
+					return Write(ErrorMessage(QStringLiteral("input slot index out of range"),
+											  message.ticket_id));
+				}
+
 				uint32_t consumed_slot = 0;
 				if (!input_pool_->Consume(&consumed_slot)) {
 					for (int slot : input_slots) {
