@@ -138,7 +138,8 @@ sudo dnf install -y \
   portaudio-devel \
   mesa-libGL-devel \
   libxkbcommon-devel \
-  gcc-c++
+  gcc-c++ \
+  bzip2-devel
 ```
 
 Configure and build:
