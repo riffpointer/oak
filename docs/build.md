@@ -130,7 +130,7 @@ Install dependencies:
 sudo dnf install -y \
   cmake ninja-build pkgconf-pkg-config \
   qt6-qtbase-devel qt6-qtbase-private-devel qt6-qttools-devel \
-  ffmpeg-devel \
+  ffmpeg-free-devel \
   OpenImageIO-devel \
   OpenColorIO-devel \
   openexr-devel \
